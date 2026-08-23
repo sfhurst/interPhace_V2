@@ -1,0 +1,1366 @@
+:root {
+  --phace-synth: #00aaff;
+  --phace-drum: #ff4b4b;
+  --phace-arp: #d98245;
+  --phace-noise: #a56cff;
+  --phace-drone: #66e0b3;
+}
+
+/*
+  interPhace Build 3 shared UI rules
+
+  Shared shell:
+  - portrait-first
+  - centered max width: 980px
+  - fixed viewport shell
+  - top and bottom bars stay fixed in layout
+  - only middle workspace scrolls
+  - non-editable UI is not text-selectable
+
+  Shared control language:
+  - synthPhace sliders / selector buttons remain the suite default
+
+  Previous font stacks retained for rollback:
+  Home: Arial, Helvetica, sans-serif
+  drumPhace: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif
+  synthPhace: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace
+*/
+/*
+  interPhace typography
+  Current shared UI stack: Arial, Helvetica, sans-serif
+
+  Previous stacks retained for rollback/reference:
+  - Home: Arial, Helvetica, sans-serif
+  - drumPhace: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif
+  - synthPhace: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace
+*/
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #0c0d0f;
+  color: #f2f3f5;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(255,255,255,0.035), transparent 34%),
+    #0c0d0f;
+}
+
+.brand-bar {
+  height: 42px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid #25282d;
+}
+
+.brand,
+.maker {
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.brand {
+  justify-self: start;
+  font-weight: 650;
+}
+
+.brand-center {
+  width: 34px;
+  height: 34px;
+}
+
+.maker {
+  justify-self: end;
+  color: #858b94;
+}
+
+.home-stage {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.home-mark {
+  font-size: clamp(30px, 8vw, 54px);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+
+.home-subtitle {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6f757e;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nav-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(12,13,15,0.96);
+  border-top: 1px solid #25282d;
+}
+
+.nav-btn {
+  width: 72px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  color: #d9dde3;
+  text-decoration: none;
+  border: 1px solid #343840;
+  border-radius: 12px;
+  background: #15171a;
+}
+
+.nav-btn:active {
+  transform: translateY(1px);
+}
+
+.nav-btn svg {
+  width: 25px;
+  height: 25px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-btn span {
+  font-size: 10px;
+  color: #8d939c;
+  letter-spacing: 0.04em;
+}
+
+/* Shared suite navigation: drumPhace bottom-bar geometry */
+.nav-bar {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(48px, 1fr));
+  gap: 6px;
+  align-items: stretch;
+  width: min(100%, 980px);
+  margin: 0 auto;
+  padding: 7px 10px max(8px, env(safe-area-inset-bottom));
+  background: #0c0d0f;
+  border-top: 1px solid #25282d;
+}
+
+.nav-btn {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid #343840;
+  border-radius: 5px;
+  background: transparent;
+  color: #8d939c;
+}
+
+.nav-btn svg {
+  width: 23px;
+  height: 23px;
+}
+
+/* Build 2: suite-wide bar alignment */
+html {
+  scrollbar-gutter: stable;
+}
+
+.brand-bar,
+.nav-bar {
+  width: min(100%, 980px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.brand-bar {
+  box-sizing: border-box;
+  grid-template-columns: 1fr 44px 1fr;
+  min-height: 42px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.brand-center {
+  width: 44px;
+  height: 34px;
+}
+
+.nav-bar {
+  box-sizing: border-box;
+  grid-template-columns: repeat(2, minmax(44px, 1fr));
+  min-height: 58px;
+}
+
+.nav-btn {
+  border-radius: 5px;
+}
+
+/* Build 3 shell */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.app {
+  width: min(100%, 980px);
+  height: 100dvh;
+  min-height: 0;
+  margin: 0 auto;
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr) 58px;
+  gap: 8px;
+}
+
+.brand-bar {
+  width: 100%;
+  min-height: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 44px 1fr;
+  align-items: center;
+}
+
+
+
+.brand { justify-self: start; }
+.maker { justify-self: end; }
+
+.shell-audition-btn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #343840;
+  border-radius: 50%;
+  background: transparent;
+  color: #8d939c;
+}
+
+.shell-audition-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  stroke: none;
+  transform: translateX(1px);
+}
+
+.home-stage {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nav-bar {
+  position: static;
+  width: 100%;
+  min-height: 58px;
+  margin: 0;
+  padding: 7px 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(44px, 1fr));
+  gap: 6px;
+  border-top: 1px solid #25282d;
+  background: #0c0d0f;
+  touch-action: pan-y;
+}
+
+.nav-btn {
+  min-width: 0;
+  min-height: 44px;
+  height: auto;
+  width: auto;
+  border-radius: 5px;
+  background: transparent;
+}
+
+.nav-btn.active {
+  color: #f2f3f5;
+  border-color: #555a63;
+}
+
+@media (min-width: 760px) {
+  .app {
+    grid-template-rows: 46px minmax(0, 1fr) 62px;
+    gap: 10px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .brand-bar {
+    height: 46px;
+  }
+}
+
+@media (max-width: 420px) {
+  .app {
+    grid-template-rows: 36px minmax(0, 1fr) 54px;
+    gap: 6px;
+  }
+
+  .brand-bar {
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .shell-audition-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+  }
+
+  .nav-bar {
+    min-height: 54px;
+    gap: 4px;
+    padding-top: 5px;
+  }
+}
+
+/* Build 4 shell row stability */
+.brand-bar,
+.nav-bar {
+  box-sizing: border-box;
+}
+
+.nav-bar {
+  grid-template-columns: repeat(3, minmax(44px, 1fr));
+}
+
+.shell-slot {
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+/* Build 4 fixed: home bottom row is a swipe surface, not fake buttons */
+.nav-bar.shell-swipe-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.nav-bar.shell-swipe-row:active {
+  cursor: grabbing;
+}
+
+.swipe-hint {
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: #343840;
+}
+
+/* Build 5: clean swipe-only home bottom bar */
+.swipe-hint { display: none !important; }
+
+.nav-bar.shell-swipe-row {
+  display: block;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+
+
+/* Build 8 shared shell overrides */
+#shell.app {
+  padding: 0 !important;
+  background: #0c0d0f;
+}
+#shell .home-stage {
+  grid-row: 2;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Build 9: child CSS may style only the middle content */
+#shell.shell-app { background: #0c0d0f; }
+.shell-middle .home-stage {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Build 11: nine-button transitional row */
+.shell-bottom-main { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+
+/* app1 button-page foundation: follows the drumPhace B2 page geometry. */
+.app1-page {
+  width: 100%;
+  min-height: 100%;
+  padding: 18px 0;
+  align-items: start;
+}
+
+.app1-page.hidden {
+  display: none;
+}
+
+.app1-panel {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Canonical interPhace page-name typography.
+   Positioning is page-type specific; typography is not. */
+.app1-title {
+  flex: 0 0 auto;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: lowercase;
+  color: currentColor;
+  padding-top: 2px;
+}
+
+
+
+
+.app1-page-body {
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+}
+
+#shell[data-context="interPhace"] .shell-bottom-main > #shellB1.active,
+#shell[data-context="interPhace"] .shell-bottom-main > #shellB2.active,
+#shell[data-context="interPhace"] .shell-bottom-main > #shellB3.active,
+#shell[data-context="interPhace"] .shell-bottom-main > #shellB4.active,
+#shell[data-context="interPhace"] .shell-bottom-main > #shellB5.active {
+  color: var(--shell-accent, #8d939c);
+  border-color: var(--shell-accent, #8d939c);
+}
+
+@media (max-width: 420px) {
+  .app1-page {
+    padding: 16px 0;
+  }
+
+  .app1-panel {
+    gap: 16px;
+  }
+}
+
+/* Build 50: interPhace app1 follows the authoritative Project/Mixer/Import/Export/Settings plan. */
+.app1-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 0;
+  overflow: auto;
+}
+
+
+
+.app1-panel {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  color: var(--shell-accent, #8d939c);
+}
+
+
+
+.app1-controls {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+/* Non-slider controls stay visually grouped with their labels. */
+.app1PairedControl {
+  display: inline-grid;
+  grid-template-columns: max-content minmax(0, auto);
+  align-items: center;
+  justify-content: start;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--shell-accent, #8d939c);
+}
+
+.app1TextControl {
+  width: min(100%, 420px);
+}
+
+.app1TextInput {
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--shell-line, #25282d);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-text, #f2f3f5);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.app1TextInput:focus {
+  border-color: var(--shell-accent, #8d939c);
+}
+
+/* Project Name is a normal foreground control styled in the grid language. */
+.app1ProjectNameInput {
+  width: min(100%, 280px);
+  min-height: 34px;
+  justify-self: start;
+  border: 1px solid var(--shell-line, #2a2d33);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-text, #f2f3f5);
+}
+
+.app1ProjectNameInput::placeholder {
+  color: var(--shell-muted, #858b94);
+  opacity: 1;
+}
+
+.macroControl.is-muted {
+  opacity: .38;
+}
+
+.app1ToggleControl {
+  min-height: 32px;
+  cursor: pointer;
+}
+
+/* Toggle labels are not slider-grid labels; keep label and switch together. */
+.app1ToggleControl .macroLabel {
+  grid-area: auto;
+  justify-self: start;
+}
+
+.app1ToggleControl input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggleTrack {
+  width: 34px;
+  height: 18px;
+  border: 1px solid var(--shell-line, #25282d);
+  border-radius: 999px;
+  position: relative;
+}
+
+.toggleTrack::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  left: 2px;
+  top: 2px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: var(--shell-bg, #0c0d0f);
+  transition: transform 90ms linear;
+}
+
+.app1ToggleControl input:checked + .toggleTrack::after {
+  transform: translateX(16px);
+}
+
+
+
+/* app1 use of the shared Background Selection Grid. */
+.app1-utility-page,
+.app1-settings-page {
+  padding: 0;
+  overflow: hidden;
+}
+
+.app1-utility-panel,
+.app1-settings-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: block;
+}
+
+/* Utility pages keep the title above the Background Selection Grid while
+   matching the standard app1 page-name baseline. */
+.app1-utility-panel > .app1-title {
+  position: absolute;
+  z-index: 3;
+  top: 18px;
+  left: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+
+.app1-utility-panel > 
+
+.app1BackgroundSelectionGrid {
+  z-index: 1;
+}
+
+.app1-settings-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  pointer-events: none;
+}
+
+.app1-settings-content .app1-controls,
+.app1-settings-content input,
+.app1-settings-content label {
+  pointer-events: auto;
+}
+
+.app1-settings-content .app1-controls {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+.backgroundSelectionCell.utilityChoice,
+.backgroundSelectionCell.utilityAction,
+.backgroundSelectionCell.utilityCommit,
+.backgroundSelectionCell.snapshotButton {
+  background: transparent;
+}
+
+.backgroundSelectionCell.utilityChoice.is-selected,
+.backgroundSelectionCell.utilityAction.is-selected {
+  border-color: var(--shell-accent, #8d939c);
+  color: var(--shell-accent, #8d939c);
+}
+
+.backgroundSelectionCell.utilityCommit {
+  border-color: var(--shell-accent, #8d939c);
+  color: var(--shell-accent, #8d939c);
+}
+
+.backgroundSelectionCell.snapshotButton {
+  color: var(--shell-muted, #777d87);
+}
+
+.backgroundSelectionCell.snapshotButton:active {
+  color: var(--shell-accent, #8d939c);
+  border-color: var(--shell-accent, #8d939c);
+}
+
+
+.snapshotGridLabel {
+  position: absolute;
+  left: var(--background-grid-label-width);
+  bottom: calc((2 * ((100% - (15 * var(--background-grid-gap))) / 16)) + (2 * var(--background-grid-gap)) + 4px);
+  z-index: 2;
+}
+
+@media (max-width: 420px) {
+  .app1-utility-panel > 
+  .app1-page:not(.app1-utility-page):not(.app1-settings-page) { padding: 16px 0; }
+  .app1-panel { gap: 16px; }
+  .app1-controls { gap: 18px; }
+  .app1PairedControl { gap: 8px; }
+  .app1TextInput { width: min(54vw, 220px); }
+  .app1-settings-content {
+    padding: 16px 0;
+    gap: 16px;
+  }
+  .app1-settings-content .app1-controls {
+    gap: 18px;
+  }
+}
+
+
+/* Build 99: preserve branded camel-case on B5 settings titles */
+.app1-settings-title {
+  text-transform: none;
+}
+
+
+
+/* Build 101: canonical Phace identity colors */
+.app1-settings-title.synth-title { color: var(--phace-synth); }
+.app1-settings-title.drum-title { color: var(--phace-drum); }
+.app1-settings-title.arp-title { color: var(--phace-arp); }
+.app1-settings-title.noise-title { color: var(--phace-noise); }
+
+/* B5 settings-page Phace identity */
+#app1_b5_p1 { --settings-phace-color: var(--phace-synth); }
+#app1_b5_p2 { --settings-phace-color: var(--phace-drum); }
+#app1_b5_p3 { --settings-phace-color: var(--phace-arp); }
+#app1_b5_p4 { --settings-phace-color: var(--phace-noise); }
+#app1_b5_p5 { --settings-phace-color: var(--phace-drone); }
+
+.app1-settings-page {
+  color: var(--settings-phace-color, var(--text));
+}
+
+.app1-settings-page .app1-settings-title {
+  color: var(--settings-phace-color, currentColor);
+}
+
+.app1-settings-page .macroSlider {
+  color: var(--settings-phace-color, currentColor);
+}
+
+
+.synthLoopToggle input:checked + .toggleTrack {
+  background: var(--phace-synth);
+  border-color: var(--phace-synth);
+}
+.drumBordersToggle input:checked + .toggleTrack {
+  background: var(--phace-drum);
+  border-color: var(--phace-drum);
+}
+.synthLoopToggle input:checked + .toggleTrack::after,
+
+/* Build 105: toggle indicators use the actual slider-knob visual */
+.app1ToggleControl {
+  cursor: pointer;
+}
+
+
+
+.app1ToggleControl .toggleTrack {
+  position: relative !important;
+  display: inline-block !important;
+  box-sizing: border-box !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  padding: 0 !important;
+  border: 1px solid #8d939c !important;
+  border-radius: 50% !important;
+  background: var(--bg, #0b0d10) !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.app1ToggleControl .toggleTrack::after {
+  content: "" !important;
+  position: absolute !important;
+  width: 6px !important;
+  height: 6px !important;
+  left: 50% !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+.synthLoopToggle input:checked + .toggleTrack::after {
+  background: var(--phace-synth) !important;
+}
+
+.drumBordersToggle input:checked + .toggleTrack::after {
+  background: var(--phace-drum) !important;
+}
+
+.arpToneToggle input:checked + .toggleTrack::after {
+  background: var(--phace-arp) !important;
+}
+
+.mixerArpTriggerToggle input:checked + .toggleTrack::after {
+  background: var(--phace-arp) !important;
+}
+.mixerArpTriggerToggle input:not(:checked) + .toggleTrack::after {
+  background: var(--phace-synth) !important;
+}
+
+.mixerDroneNoiseLinkToggle input:checked + .toggleTrack::after {
+  background: var(--phace-noise) !important;
+}
+
+.app1ToggleControl input:checked + .toggleTrack {
+  background: var(--bg, #0b0d10) !important;
+  border: 1px solid #8d939c !important;
+}
+
+/* Export category headers: authoritative strong bottom divider. */
+.backgroundSelectionCell.utilityHeader {
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid var(--shell-line, #2a2d33);
+  border-bottom: 2px solid #555a63 !important;
+  color: var(--shell-muted, #777d87);
+}
+
+
+/* Build 128: NEW hold-to-confirm fill meter */
+.backgroundSelectionCell.utilityAction {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.backgroundSelectionCell.utilityAction::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--new-fill, 0%);
+  background: color-mix(in srgb, var(--shell-accent, #8d939c) 34%, transparent);
+  pointer-events: none;
+}
+
+.backgroundSelectionCell.utilityAction {
+  transition: none;
+}
+
+.backgroundSelectionCell.utilityAction::before {
+  transition: none;
+}
+
+
+
+@media (max-width: 420px) {
+  .app1-utility-panel > .app1-title { top: 16px; }
+}
+
+/* Build 307: root slider pages visually match the canonical drumPhace B2 layout
+   without changing interPhace's app1-page navigation contract. */
+
+/* Project + Mixer share the canonical slider-page breathing. */
+#app1_b1_p1.app1-page,
+#app1_b2_p1.app1-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 14px;
+  overflow: hidden;
+  align-items: start;
+  box-sizing: border-box;
+}
+
+#app1_b1_p1 .app1-panel,
+#app1_b2_p1 .app1-panel {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--shell-accent, #8d939c);
+  box-sizing: border-box;
+}
+
+#app1_b1_p1 .app1-title,
+#app1_b2_p1 .app1-title {
+  flex: 0 0 auto;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: lowercase;
+  color: currentColor;
+  padding-top: 2px;
+}
+
+#app1_b1_p1 .app1-controls,
+#app1_b2_p1 .app1-controls {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+/* B5 keeps its settings/background-grid architecture, but its actual slider
+   content uses the same canonical control breathing. */
+.app1-settings-content .app1-controls {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+/* Relationship controls participate in the same controls stack vertically,
+   while retaining the project's exact paired-toggle internal geometry. */
+#app1_b2_p1 .app1PairedControl {
+  margin: 0;
+}
+
+/* Phone compression mirrors the canonical child slider pages. */
+@media (max-width: 420px) {
+  #app1_b1_p1.app1-page,
+  #app1_b2_p1.app1-page {
+    padding: 14px 10px;
+  }
+
+  #app1_b1_p1 .app1-panel,
+  #app1_b2_p1 .app1-panel {
+    gap: 16px;
+  }
+
+  #app1_b1_p1 .app1-controls,
+  #app1_b2_p1 .app1-controls,
+  .app1-settings-content .app1-controls {
+    gap: 18px;
+  }
+}
+
+/* Height-responsive compression follows the same intent as the canonical
+   child pages: preserve the full no-scroll phone layout before shrinking controls. */
+@media (max-height: 720px) {
+  #app1_b1_p1.app1-page,
+  #app1_b2_p1.app1-page {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  #app1_b1_p1 .app1-panel,
+  #app1_b2_p1 .app1-panel {
+    gap: 14px;
+  }
+
+  #app1_b1_p1 .app1-controls,
+  #app1_b2_p1 .app1-controls,
+  .app1-settings-content .app1-controls {
+    gap: 16px;
+  }
+}
+
+/* Build 308: final interPhace slider-page geometry correction.
+   Match the effective canonical child-Phace layout, not earlier intermediate values. */
+
+/* Project + Mixer: no extra horizontal inset inside shellMiddle. */
+#app1_b1_p1.app1-page,
+#app1_b2_p1.app1-page {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Canonical vertical breathing for root slider stacks. */
+#app1_b1_p1 .app1-controls,
+#app1_b2_p1 .app1-controls,
+.app1-settings-content .app1-controls {
+  gap: 24px;
+}
+
+/* Keep panel breathing aligned with the final child-page cascade. */
+#app1_b1_p1 .app1-panel,
+#app1_b2_p1 .app1-panel {
+  gap: 20px;
+}
+
+@media (max-width: 420px) {
+  #app1_b1_p1.app1-page,
+  #app1_b2_p1.app1-page {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  #app1_b1_p1 .app1-controls,
+  #app1_b2_p1 .app1-controls,
+  .app1-settings-content .app1-controls {
+    gap: 30px;
+  }
+
+  #app1_b1_p1 .app1-panel,
+  #app1_b2_p1 .app1-panel {
+    gap: 24px;
+  }
+}
+
+@media (max-height: 720px) {
+  #app1_b1_p1 .app1-controls,
+  #app1_b2_p1 .app1-controls,
+  .app1-settings-content .app1-controls {
+    gap: 36px;
+  }
+}
+
+/* Build 309: interPhace vertical rhythm matches the final dronePhace cascade exactly. */
+
+/* Base */
+#app1_b1_p1 .app1-panel,
+#app1_b2_p1 .app1-panel {
+  gap: 18px;
+}
+#app1_b1_p1 .app1-controls,
+#app1_b2_p1 .app1-controls,
+.app1-settings-content .app1-controls {
+  gap: 20px;
+}
+
+/* Taller screens gain the same breathing as canonical child Phaces. */
+@media (min-height: 650px) {
+  #app1_b1_p1 .app1-panel,
+  #app1_b2_p1 .app1-panel {
+    gap: 20px;
+  }
+
+  #app1_b1_p1 .app1-controls,
+  #app1_b2_p1 .app1-controls,
+  .app1-settings-content .app1-controls {
+    gap: 24px;
+  }
+}
+
+@media (min-height: 760px) {
+  #app1_b1_p1 .app1-panel,
+  #app1_b2_p1 .app1-panel {
+    gap: 24px;
+  }
+
+  #app1_b1_p1 .app1-controls,
+  #app1_b2_p1 .app1-controls,
+  .app1-settings-content .app1-controls {
+    gap: 30px;
+  }
+}
+
+@media (min-height: 900px) {
+  #app1_b1_p1 .app1-controls,
+  #app1_b2_p1 .app1-controls,
+  .app1-settings-content .app1-controls {
+    gap: 36px;
+  }
+}
+
+/* Remove the incorrect inverse height compression from Build 308. */
+
+/* Build 310: relationship-toggle pair spacing.
+   The pair stays in the canonical controls stack; only the space between the
+   two related toggles is tightened to resemble the internal rhythm of a slider control. */
+#app1_b2_p1 .mixerDroneNoiseLinkToggle {
+  margin-top: -12px;
+}
+
+@media (min-height: 760px) {
+  #app1_b2_p1 .mixerDroneNoiseLinkToggle {
+    margin-top: -18px;
+  }
+}
+
+@media (min-height: 900px) {
+  #app1_b2_p1 .mixerDroneNoiseLinkToggle {
+    margin-top: -24px;
+  }
+}
+
+/* Build 316: interPhace B2/P2 Sequencer clones the canonical arpPhace Melody grid chassis. */
+#app1_b2_p2.app1-sequencer-page {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: stretch;
+  overflow: hidden;
+  padding: 0;
+}
+#app1_b2_p2.app1-sequencer-page.hidden {
+  display: none;
+}
+.interPhaceSequencerGrid {
+  --seq-cols: 4;
+  --seq-label-width: 28px;
+  --seq-grid-gap: clamp(2px, 0.65vw, 5px);
+  --seq-radius: 4px;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: var(--seq-label-width) repeat(var(--seq-cols), minmax(0, 1fr));
+  grid-template-rows: repeat(16, minmax(0, 1fr));
+  gap: var(--seq-grid-gap);
+}
+.interPhaceSequencerGrid .labelCell,
+.interPhaceSequencerGrid .stepBtn {
+  min-width: 0;
+  min-height: 0;
+}
+.interPhaceSequencerGrid .labelCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 5px;
+  color: var(--shell-muted, #858b94);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(9px, 2.4vw, 11px);
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.interPhaceSequencerGrid .stepBtn {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 1px solid var(--shell-line, #25282d);
+  border-radius: var(--seq-radius);
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  transition: background-color 70ms linear, border-color 70ms linear, opacity 70ms linear;
+}
+.interPhaceSequencerGrid .stepBtn.eighthRow {
+  background: transparent;
+}
+.interPhaceSequencerGrid .stepBtn.rowDivider {
+  border-bottom-color: #555a63;
+  border-bottom-width: 2px;
+}
+.interPhaceSequencerGrid .stepBtn:focus-visible,
+.interPhaceSequencerGrid .labelCell:focus-visible {
+  outline: 2px solid #d7d9dd;
+  outline-offset: 1px;
+}
+.interPhaceSequencerGrid .stepBtn:active {
+  opacity: 0.72;
+}
+.interPhaceSequencerGrid .stepBtn.is-selected {
+  border-color: var(--shell-accent, #8d939c);
+}
+@media (min-width: 760px) {
+  .interPhaceSequencerGrid {
+    --seq-cols: 8;
+    --seq-label-width: 34px;
+    --seq-grid-gap: 5px;
+  }
+}
+
+/* Build 317: B2/P2 selector UI cloned from arpPhace Melody chooser. */
+.sequencerEntryChooser {
+  display: contents;
+}
+
+.sequencerChooserButton {
+  position: relative;
+  z-index: 12;
+  pointer-events: auto;
+  color: var(--muted);
+  background: var(--cell) !important;
+  text-align: center;
+}
+
+.sequencerChooserButton.eighthRow {
+  background: var(--cell-alt) !important;
+}
+
+.sequencerChooserButton:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.sequencerChooserButton.isActiveModifier {
+  border-color: var(--shell-accent);
+  color: var(--shell-accent);
+}
+
+/* Build 318: B2/P2 base-grid styling now matches arpPhace Melody grid.
+   Underlying grid cells are transparent; only chooser overlay cells are filled. */
+#app1_b2_p2 .interPhaceSequencerGrid .stepBtn,
+#app1_b2_p2 .interPhaceSequencerGrid .stepBtn:nth-child(odd),
+#app1_b2_p2 .interPhaceSequencerGrid .stepBtn:nth-child(even) {
+  background: transparent;
+}
+
+#app1_b2_p2 .interPhaceSequencerGrid .stepBtn.eighthRow {
+  background: transparent;
+}
+
+/* Selector overlay intentionally obscures the underlying grid, matching arpPhace. */
+#app1_b2_p2 .sequencerChooserButton {
+  background: var(--cell) !important;
+}
+
+#app1_b2_p2 .sequencerChooserButton.eighthRow {
+  background: var(--cell-alt) !important;
+}
+
+
+/* Build 319: sequencer selector uses neutral interPhace UI colors.
+   It is not arp-specific and must not inherit arpPhace orange identity. */
+#app1_b2_p2 .sequencerChooserButton {
+  background: #17191e !important;
+  color: var(--shell-muted, #858b94);
+  border-color: var(--shell-line, #25282d);
+}
+
+#app1_b2_p2 .sequencerChooserButton.eighthRow {
+  background: #1b1e23 !important;
+}
+
+/* Hide the entire interPhace middle surface until initial state restoration
+   has selected the correct root page, preventing B1/Root Note startup flash. */
+html:not(.interphase-ready) #shellMiddle {
+  visibility: hidden;
+}
+
+/* Build 320: sequencer programmed-step identity. Base grid remains transparent. */
+#app1_b2_p2 .interSequencerCell.isSequenced {
+  background: transparent !important;
+  font-size: clamp(9px, 2.4vw, 11px);
+  font-weight: 650;
+  line-height: 1;
+}
+
+#app1_b2_p2 .interSequencerCell.melodyTrack.isSequenced {
+  border-color: var(--phace-arp);
+  color: var(--phace-arp);
+}
+#app1_b2_p2 .interSequencerCell.kickTrack.isSequenced {
+  border-color: #ff4b4b;
+  color: #ff4b4b;
+}
+#app1_b2_p2 .interSequencerCell.snareTrack.isSequenced {
+  border-color: #4ee26b;
+  color: #4ee26b;
+}
+#app1_b2_p2 .interSequencerCell.hatTrack.isSequenced {
+  border-color: #f1d74c;
+  color: #f1d74c;
+}
+
+#app1_b2_p2 .sequencerChooserButton {
+  font-size: clamp(9px, 2.4vw, 11px);
+  font-weight: 650;
+}
+#app1_b2_p2 .sequencerChooserButton.isActiveModifier {
+  border-color: var(--shell-accent, #8d939c);
+  color: var(--shell-accent, #8d939c);
+}
+
+
+/* Build 357: long-press EXPORT fill and live construction-kit progress. */
+.backgroundSelectionCell.utilityCommit {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.backgroundSelectionCell.utilityCommit::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--export-fill, 0%);
+  background: color-mix(in srgb, var(--shell-accent, #8d939c) 34%, transparent);
+  pointer-events: none;
+  transition: none;
+}
+
+.backgroundSelectionCell.utilityProgress {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--shell-muted, #777d87);
+  pointer-events: none;
+  cursor: default;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+
+/* Build 358: B2 Sequencer long-press clear progress. */
+#shellB2 {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+#shellB2::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--clear-fill, 0%);
+  background: color-mix(in srgb, currentColor 28%, transparent);
+  pointer-events: none;
+}
