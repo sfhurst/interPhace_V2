@@ -440,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let arpSequence = null;
     const arpNoteBuffers = new Map();
     const sequencerDrumBuffers = new Map();
-    const sequencerMelodySnapshots = new Map();
+    let sequencerMelodyRender = null;
 
     if (sequencerActive) {
       if (drumActive) {
@@ -472,18 +472,38 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (synthActive) {
+        // Build the sequenced Melody as one continuous performance and send it
+        // through synthPhace once. This intentionally matches arpPhace audition:
+        // delay/reverb/chorus state is continuous across sequencer bar boundaries
+        // instead of being reset and tail-wrapped independently for every bar.
+        const melodyEvents = [];
         for (let row = 0; row < sequenceInfo.bars; row += 1) {
           const parsed = parseSequencerCell(state.sequencer[row][0], 0);
           if (!parsed) continue;
 
-          const key = `M${parsed.melody}.${parsed.bar}`;
-          if (sequencerMelodySnapshots.has(key)) continue;
+          const snapshot = arpAPI?.state?.globalMelodyBarSnapshot?.(
+            parsed.phrase,
+            parsed.bar
+          );
+          if (!snapshot?.events?.length) continue;
 
-          const renderedBar = await arpAPI.render.renderSourceBar({
-            phrase: parsed.phrase,
-            sourceBar: parsed.bar,
+          const barStart = row * secondsPerBar;
+          for (const event of snapshot.events) {
+            melodyEvents.push({
+              ...event,
+              offsetSeconds: barStart + Math.max(0, Number(event.offsetSeconds) || 0),
+            });
+          }
+          if (generation !== globalAuditionGeneration) return null;
+        }
+
+        if (melodyEvents.length) {
+          sequencerMelodyRender = await synthAPI.renderArpPerformance({
+            events: melodyEvents,
+            loopSeconds,
+            effectsReleaseMs: arpEffectsReleaseMs,
+            tempo,
           });
-          if (renderedBar?.buffer) sequencerMelodySnapshots.set(key, renderedBar);
           if (generation !== globalAuditionGeneration) return null;
         }
       }
@@ -554,8 +574,11 @@ document.addEventListener("DOMContentLoaded", () => {
             Math.max(0, buffer.duration - (arpSequence?.gateSeconds || 0))
           ))
         : 0;
+      const sequencerMelodyTail = sequencerActive && sequencerMelodyRender?.buffer
+        ? Math.max(0, sequencerMelodyRender.buffer.duration - loopSeconds)
+        : 0;
       const extraTail = sequencerActive
-        ? 0
+        ? sequencerMelodyTail
         : (useArpTrigger ? fallbackArpTail : (synthBuffer ? Math.max(0, synthBuffer.duration - triggerSeconds) : 0));
 
       const totalRenderSeconds = loopSeconds + extraTail + 0.05;
@@ -590,22 +613,17 @@ document.addEventListener("DOMContentLoaded", () => {
             source.stop(Math.min(totalRenderSeconds, barStart + secondsPerBar));
           }
 
-          if (!state.muted.synth) {
-            const parsedMelody = parseSequencerCell(state.sequencer[row][0], 0);
-            if (parsedMelody) {
-              const renderedBar = sequencerMelodySnapshots.get(`M${parsedMelody.melody}.${parsedMelody.bar}`);
-              if (renderedBar?.buffer) {
-                const source = offline.createBufferSource();
-                source.buffer = copyBufferIntoContext(offline, renderedBar.buffer);
-                const melodyGain = offline.createGain();
-                melodyGain.gain.value = mixerChannelGain("synth");
-                source.connect(melodyGain);
-                melodyGain.connect(mixBus);
-                source.start(barStart);
-                source.stop(Math.min(totalRenderSeconds, barStart + secondsPerBar));
-              }
-            }
-          }
+          // Melody is scheduled once below as a continuous effects performance.
+        }
+
+        if (!state.muted.synth && sequencerMelodyRender?.buffer) {
+          const source = offline.createBufferSource();
+          source.buffer = copyBufferIntoContext(offline, sequencerMelodyRender.buffer);
+          const melodyGain = offline.createGain();
+          melodyGain.gain.value = mixerChannelGain("synth");
+          source.connect(melodyGain);
+          melodyGain.connect(mixBus);
+          source.start(0);
         }
       } else {
         if (drumRender?.buffer) {
@@ -2568,10 +2586,30 @@ document.addEventListener("DOMContentLoaded", () => {
     return ctx.startRendering();
   }
 
-  async function repeatBedStem(buffer, totalSeconds) {
+  async function repeatBedStem(buffer, totalSeconds, { leadInSeconds = 0, fadeInSeconds = 0 } = {}) {
     const sampleRate=buffer.sampleRate||48000;
     const ctx=new OfflineAudioContext(Math.min(2,buffer.numberOfChannels),Math.max(1,Math.ceil(totalSeconds*sampleRate)),sampleRate);
-    const src=ctx.createBufferSource(); src.buffer=buffer; src.loop=true; src.connect(ctx.destination); src.start(0); src.stop(totalSeconds);
+    const src=ctx.createBufferSource();
+    const entrance=ctx.createGain();
+    src.buffer=buffer; src.loop=true; src.connect(entrance); entrance.connect(ctx.destination);
+
+    const lead=Math.max(-10,Math.min(10,Number(leadInSeconds)||0));
+    const fade=Math.max(0,Math.min(10,Number(fadeInSeconds)||0));
+    if(lead>=0){
+      const start=Math.min(totalSeconds,lead);
+      if(fade>0){
+        entrance.gain.setValueAtTime(0,start);
+        entrance.gain.linearRampToValueAtTime(1,Math.min(totalSeconds,start+fade));
+      } else entrance.gain.setValueAtTime(1,start);
+      if(start<totalSeconds){ src.start(start,0); src.stop(totalSeconds); }
+    } else {
+      const elapsed=-lead;
+      const offset=buffer.duration>0 ? elapsed%buffer.duration : 0;
+      const initial=fade>0 ? Math.min(1,elapsed/fade) : 1;
+      entrance.gain.setValueAtTime(initial,0);
+      if(fade>elapsed) entrance.gain.linearRampToValueAtTime(1,Math.min(totalSeconds,fade-elapsed));
+      src.start(0,offset); src.stop(totalSeconds);
+    }
     return ctx.startRendering();
   }
 
@@ -2646,7 +2684,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const needNoise = selected.has("noise");
     const needDrone = selected.has("drone");
     const {drumAPI,synthAPI,arpAPI,noiseAPI,droneAPI}=await getGlobalRenderAPIs({
-      includeDrum:needDrum, includeSynth:needSynth, includeArp:needMelody,
+      includeDrum:needDrum, includeSynth:(needSynth||needMelody), includeArp:needMelody,
       includeNoise:needNoise, includeDrone:needDrone
     });
     const files=[];
@@ -2684,11 +2722,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (needNoise && noiseAPI) {
-      const r=noiseAPI.renderBed();
+      const duration=bedExportLengthSeconds(state.child.noiseExportLength);
+      const r=noiseAPI.renderBed({duration});
       add(`noise-loop-${Math.round(r.loopSeconds)}s.wav`,r.buffer);
     }
     if (needDrone && droneAPI) {
-      const r=droneAPI.renderBed();
+      const duration=bedExportLengthSeconds(state.child.droneExportLength);
+      const r=droneAPI.renderBed({duration});
       add(`drone-loop-${Math.round(r.loopSeconds)}s.wav`,r.buffer);
     }
 
@@ -2703,15 +2743,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const root=Math.round(Number(state.project.root)||60);
       const gate=Math.max(0.25,Number(state.settings?.synthAuditionLength)||2);
       for (const dry of [true,false]) {
-        const r=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,dry});
+        const r=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,dry,effectsReleaseMs:state.child.synthEffectsRelease});
         add(`synth-root-${midiNoteName(root)}-${dry?"dry":"wet"}.wav`,r.buffer);
       }
-      const noH=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,noHarmonies:true});
+      const noH=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,noHarmonies:true,effectsReleaseMs:state.child.synthEffectsRelease});
       add(`synth-root-${midiNoteName(root)}-no-harmonies-wet.wav`,noH.buffer);
-      const noise=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,noiseOnly:true});
+      const noise=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,noiseOnly:true,effectsReleaseMs:state.child.synthEffectsRelease});
       add(`synth-noise-isolated.wav`,noise.buffer);
       for(const note of constructionScaleNotes(root,state.project.scale)) for(const dry of [true,false]) {
-        const r=await synthAPI.renderConstructionNote({midiNote:note,gateSeconds:gate,tempo,dry});
+        const r=await synthAPI.renderConstructionNote({midiNote:note,gateSeconds:gate,tempo,dry,effectsReleaseMs:state.child.synthEffectsRelease});
         add(`synth-${midiNoteName(note)}-${dry?"dry":"wet"}.wav`,r.buffer);
       }
     }
@@ -2735,21 +2775,36 @@ document.addEventListener("DOMContentLoaded", () => {
           if(pieces.length) add(`sequencer-${type}-${tempo}bpm.wav`,await assembleConstructionStem(pieces,secondsPerBar,seq.bars));
         }
       }
-      if(needMelody && arpAPI && seq.hasMelody) {
-        const pieces=[];
+      if(needMelody && arpAPI && synthAPI && seq.hasMelody) {
+        const melodyEvents=[];
         for(let row=0;row<seq.bars;row++) {
           const parsed=parseSequencerCell(state.sequencer[row][0],0); if(!parsed) continue;
-          const r=await arpAPI.render.renderSourceBar({phrase:parsed.phrase,sourceBar:parsed.bar,preserveTail:true});
-          if((r?.eventCount||0)>0) pieces.push({row,buffer:r.buffer});
+          const snapshot=arpAPI.state.globalMelodyBarSnapshot(parsed.phrase,parsed.bar);
+          if(!snapshot?.events?.length) continue;
+          const barStart=row*secondsPerBar;
+          for(const event of snapshot.events) melodyEvents.push({
+            ...event,
+            offsetSeconds:barStart+Math.max(0,Number(event.offsetSeconds)||0),
+          });
         }
-        if(pieces.length) add(`sequencer-melody-${tempo}bpm.wav`,await assembleConstructionStem(pieces,secondsPerBar,seq.bars));
+        if(melodyEvents.length){
+          const r=await synthAPI.renderArpPerformance({
+            events:melodyEvents,
+            loopSeconds:seq.bars*secondsPerBar,
+            effectsReleaseMs:state.child.arpEffectsRelease,
+            tempo,
+          });
+          if(r?.buffer) add(`sequencer-melody-${tempo}bpm.wav`,r.buffer);
+        }
       }
       const seqSeconds=seq.bars*secondsPerBar;
       if(needNoise && noiseAPI) {
-        const r=noiseAPI.renderBed(); add(`sequencer-noise-${tempo}bpm.wav`,await repeatBedStem(r.buffer,seqSeconds));
+        const r=noiseAPI.renderBed({duration:bedExportLengthSeconds(state.child.noiseExportLength)});
+        add(`sequencer-noise-${tempo}bpm.wav`,await repeatBedStem(r.buffer,seqSeconds,{leadInSeconds:state.child.noiseLeadIn,fadeInSeconds:state.child.noiseFadeIn}));
       }
       if(needDrone && droneAPI) {
-        const r=droneAPI.renderBed(); add(`sequencer-drone-${tempo}bpm.wav`,await repeatBedStem(r.buffer,seqSeconds));
+        const r=droneAPI.renderBed({duration:bedExportLengthSeconds(state.child.droneExportLength)});
+        add(`sequencer-drone-${tempo}bpm.wav`,await repeatBedStem(r.buffer,seqSeconds,{leadInSeconds:state.child.droneLeadIn,fadeInSeconds:state.child.droneFadeIn}));
       }
     }
 
@@ -2962,7 +3017,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let maxGate=0; for(let r=0;r<16;r++)for(let b=0;b<bars;b++){const g=Number(chance.gate?.[r]?.[b]);if(Number.isFinite(g))maxGate=Math.max(maxGate,g);} if(!maxGate)maxGate=100;
     const gateSeconds=(60/tempo/4)*(maxGate/100), rendered=[], bufferByNote=new Map();
     if(apis.synthAPI?.renderConstructionNote) for(const n of notes){
-      const x=await apis.synthAPI.renderConstructionNote({midiNote:n,gateSeconds,tempo,dry:false});
+      const x=await apis.synthAPI.renderConstructionNote({midiNote:n,gateSeconds,tempo,dry:false,effectsReleaseMs:state.child.arpEffectsRelease});
       if(x?.buffer){ rendered.push(x.buffer); bufferByNote.set(n,x.buffer); }
     }
     const pairSliceMap=new Map();

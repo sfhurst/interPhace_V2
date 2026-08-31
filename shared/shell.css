@@ -790,3 +790,105 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     row-gap: var(--interphace-slider-label-gap);
   }
 }
+
+/* Build 487: bring root interPhace slider/settings pages into the same
+   title + 8-slot geometry as every child Phace. This is intentionally
+   scoped to foreground control layers so utility/background grids and
+   the sequencer remain untouched. */
+
+/* Project + Mixer use the canonical foreground panel geometry. */
+#app1_b1_p1.app1-page,
+#app1_b2_p1.app1-page {
+  padding: 0;
+  overflow: hidden;
+  align-items: stretch;
+}
+
+#app1_b1_p1 .app1-panel,
+#app1_b2_p1 .app1-panel {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 16px var(--interphace-control-inset) 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  row-gap: var(--interphace-title-gap);
+  align-content: stretch;
+}
+
+#app1_b1_p1 .app1-title,
+#app1_b2_p1 .app1-title {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  align-self: start;
+}
+
+/* Settings retain their full-width background grid. Only the foreground
+   content layer receives the canonical inset and 8-slot layout. */
+.app1-settings-content {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 16px var(--interphace-control-inset) 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  row-gap: var(--interphace-title-gap);
+  align-content: stretch;
+}
+
+.app1-settings-content > .app1-title {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  align-self: start;
+}
+
+#app1_b1_p1 .app1-controls,
+#app1_b2_p1 .app1-controls,
+.app1-settings-content .app1-controls {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  grid-auto-flow: row;
+  gap: 0;
+  align-items: stretch;
+  align-content: stretch;
+}
+
+/* Non-slider controls still occupy one canonical slot, but keep their
+   own internal geometry instead of being restyled as sliders. */
+#app1_b1_p1 .app1ProjectNameInput,
+#app1_b2_p1 .app1PairedControl,
+.app1-settings-content .app1PairedControl {
+  align-self: center;
+  margin: 0;
+}
+
+#app1_b1_p1 .app1ProjectNameInput {
+  height: 34px;
+}
+
+/* Retire the Build 310 visual compensation. Equal slots now provide the
+   intended relationship spacing without a negative margin. */
+#app1_b2_p1 .mixerDroneNoiseLinkToggle {
+  margin-top: 0;
+}
+
+@media (max-width: 420px) {
+  #app1_b1_p1 .app1-panel,
+  #app1_b2_p1 .app1-panel,
+  .app1-settings-content {
+    padding-left: var(--interphace-control-inset);
+    padding-right: var(--interphace-control-inset);
+  }
+}

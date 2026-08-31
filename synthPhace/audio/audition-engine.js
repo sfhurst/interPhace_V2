@@ -685,6 +685,7 @@
     dry = false,
     noHarmonies = false,
     noiseOnly = false,
+    effectsReleaseMs = 120,
   } = {}) {
     const adapter = window.SynthPhacePatchAdapter;
     adapter.captureAndSave?.(window.SynthPhaceUIState || {});
@@ -709,11 +710,12 @@
       }
       patch.fx.wetDryMix = 0;
     }
+    const safeEffectsReleaseMs = Math.max(10, Math.min(400, Math.round(Number(effectsReleaseMs) || 120)));
     return renderCompleteAudition(patch, activeGeneration, {
       loop: false,
       lengthSeconds: Math.max(0.05, Number(gateSeconds) || 2),
-      effectsReleaseMs: 120,
-      effectsReleaseSeconds: 0.12,
+      effectsReleaseMs: safeEffectsReleaseMs,
+      effectsReleaseSeconds: safeEffectsReleaseMs / 1000,
     });
   }
 

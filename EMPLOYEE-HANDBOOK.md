@@ -966,3 +966,29 @@ arpPhace B2 target controls are now locked as: Sparse = Variation / Space / Repe
 - arpPhace B2's four sliders therefore occupy exactly the upper half of the standard control area.
 - Slider panels use a 12 px left/right touch-safe inset on iPhone while background grids remain full-width.
 - Per-Phace legacy spacing rules remain in their historical CSS but are superseded by the shared shell rule.
+
+
+## Build 487 — interPhace Canonical Control Geometry
+- Root interPhace Project, Mixer, and child-Phace Settings pages now use the same reserved title row and eight equal vertical control slots as the active Phaces.
+- Root foreground control layers use the same 12 px left/right touch-safe inset. Background selection grids and the Sequencer remain full-width and unchanged.
+- Project Name and toggle controls occupy normal control slots while retaining their existing input/toggle styling.
+- Historical Build 307–310 interPhace spacing rules remain in place for traceability but are superseded by the final shared Build 487 override.
+- No interPhace JavaScript, control IDs, event bindings, navigation, audio behavior, or grid markup changed.
+
+
+## Build 488 — Continuous interPhace Melody Effects
+- interPhace Sequencer/Global Play now assembles selected arpPhace Melody bars into one continuous note-event timeline before synth rendering.
+- The complete timeline is rendered once through the same `synthPhace` `renderArpPerformance()` effects path used by arpPhace audition.
+- Delay, reverb, chorus, and other effect state therefore remain continuous across interPhace sequencer bar boundaries instead of resetting for every source bar.
+- The final synth/effects tail is preserved through the offline render and folded only at the complete interPhace loop boundary.
+- Drum, noise, drone, sequencer selection, Melody source data, note gates, swing, mixer controls, and arpPhace audition behavior are unchanged.
+
+## Build 489 — Audio Export Value Parity
+- Audio export was audited against the live Phace/global audition paths.
+- Sequencer Melody WAV export now assembles the selected M1-M4 source bars into one continuous event timeline and renders that timeline once through synthPhace, matching Build 488 Global Play. Effects state is no longer reset at every sequencer bar boundary.
+- Synth construction WAVs now use the current interPhace > synthPhace Settings `Effects Release` value instead of a hard-coded 120 ms release.
+- M8 Melody sample rendering uses the current arpPhace `Effects Release`, matching Melody playback ownership.
+- Noise and Drone standalone WAVs now honor their 15/30/60/120/180/300-second `Export Length` settings.
+- Sequencer Noise/Drone stems now honor their Lead-In and Fade-In values. Fade-In is applied once at the bed entrance, not baked repeatedly into the source loop.
+- Construction WAVs remain intentionally pre-mixer: interPhace channel dB/mute state is not baked into reusable Synth/Drum/Melody/Noise/Drone source assets.
+- Project/Phace `Timing` percentage controls remain outside this change because their musical timing semantics are not currently implemented consistently enough to infer safely during export.
