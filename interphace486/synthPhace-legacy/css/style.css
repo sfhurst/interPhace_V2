@@ -1,0 +1,1054 @@
+/*
+  interPhace Build 3 shared UI rules
+
+  Shared shell:
+  - portrait-first
+  - centered max width: 980px
+  - fixed viewport shell
+  - top and bottom bars stay fixed in layout
+  - only middle workspace scrolls
+  - non-editable UI is not text-selectable
+
+  Shared control language:
+  - synthPhace sliders / selector buttons remain the suite default
+
+  Previous font stacks retained for rollback:
+  Home: Arial, Helvetica, sans-serif
+  drumPhace: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif
+  synthPhace: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace
+*/
+/*
+  interPhace typography
+  Current shared UI stack: Arial, Helvetica, sans-serif
+
+  Previous synthPhace stack retained for rollback:
+  ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace
+
+  Any component-specific monospace declarations below are intentional.
+*/
+/* GLOBAL -------------------------------------------------- */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #111;
+  color: #eee;
+}
+
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 16px 16px;
+}
+
+/* HEADER -------------------------------------------------- */
+
+/* .instrument-header {
+  text-align: center;
+  margin-bottom: 24px;
+} */
+
+.instrument-name {
+  font-size: 28px;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.instrument-brand {
+  font-size: 12px;
+  color: #888;
+  letter-spacing: 0.16em;
+}
+
+.instrument-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #111;
+  padding: 12px 16px;
+  border-bottom: 1px solid #333;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}
+
+.instrument-left,
+.instrument-right {
+  color: #eee;
+  font-weight: 500;
+}
+
+.play-btn {
+  background: #0af;
+  color: #000;
+  border: none;
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* PANELS (Accordion) -------------------------------------- */
+
+.panel {
+  border: 1px solid #333;
+  margin-bottom: 12px;
+  background: #181818;
+  border-radius: 4px;
+}
+
+.panel-header {
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  background: #202020;
+  border: none;
+  color: #eee;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.panel-body {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 16px;
+}
+
+.panel.open .panel-body {
+  padding: 16px;
+  max-height: 2000px;
+}
+
+/* CONTROLS ------------------------------------------------ */
+
+.control {
+  margin-bottom: 16px;
+}
+
+.control-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+
+.control-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.control-body input[type="range"] {
+  flex: 1;
+}
+
+.control-value {
+  font-size: 12px;
+  color: #0af; /* your signature blue */
+  min-width: 60px;
+  text-align: right;
+}
+
+.control-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.control-value.preset-modified {
+  color: #555;
+  opacity: 0.72;
+}
+
+.engine-panel {
+  display: none;
+}
+
+.engine-panel.active {
+  display: block;
+}
+
+.eq-band-panel {
+  display: none;
+}
+
+.eq-band-panel.active {
+  display: block;
+}
+
+/* DIVIDER */
+
+.divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0));
+  margin: 28px 0;
+}
+
+/* RENDER BUTTON ------------------------------------------- */
+
+.render-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
+  background: #444;
+  color: #eee;
+  border: 1px solid #666;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  border-radius: 3px;
+}
+
+.render-btn:hover {
+  background: #555;
+}
+
+.play-btn:hover {
+  background: #39c;
+}
+
+/* Mobile */
+
+@media (max-width: 600px) {
+  .app {
+    max-width: 100%;
+    padding: 12px;
+  }
+
+  .panel-header {
+    font-size: 16px;
+    padding: 14px 16px;
+  }
+
+  .control-label,
+  .control-value {
+    font-size: 16px;
+  }
+
+  .control-body input[type="range"] {
+    height: 32px;
+  }
+
+  .page-btn {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+}
+
+/* ELECTRIC RANGE SLIDERS ---------------------------------- */
+.control-body input[type="range"] {
+  --range-track-bg: linear-gradient(to right, #34383b 0%, #34383b 100%);
+  appearance: none;
+  -webkit-appearance: none;
+  height: 18px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.control-body input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  border: 0;
+  border-radius: 0;
+  background: var(--range-track-bg);
+  box-shadow: 0 0 5px rgba(0, 170, 255, 0.28);
+}
+
+.control-body input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  border: 2px solid #00aaff;
+  border-radius: 50%;
+  background: #181818;
+  box-shadow: 0 0 7px rgba(0, 170, 255, 0.5);
+}
+
+.control-body input[type="range"]::-moz-range-track {
+  height: 2px;
+  border: 0;
+  border-radius: 0;
+  background: var(--range-track-bg);
+  box-shadow: 0 0 5px rgba(0, 170, 255, 0.28);
+}
+
+.control-body input[type="range"]::-moz-range-progress {
+  background: transparent;
+}
+
+.control-body input[type="range"]::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #00aaff;
+  border-radius: 50%;
+  background: #181818;
+  box-shadow: 0 0 7px rgba(0, 170, 255, 0.5);
+}
+
+.control-body input[type="range"]:focus-visible {
+  outline: none;
+}
+
+.control-body input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(0, 170, 255, 0.18), 0 0 9px rgba(0, 170, 255, 0.7);
+}
+
+.control-body input[type="range"]:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(0, 170, 255, 0.18), 0 0 9px rgba(0, 170, 255, 0.7);
+}
+
+
+/* Render capability groups are removed from layout when the patch cannot produce them.
+   JS owns capability state; this class is presentation only. */
+
+/* BUILD 61 RENDER TOOLS ----------------------------------- */
+.render-tools-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.render-tool-btn {
+  width: 100%;
+  min-height: 38px;
+}
+
+.render-centered {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+
+.render-tool-btn.random-ack {
+  border-color: #0af;
+  color: #0af;
+  box-shadow: 0 0 10px rgba(0, 170, 255, 0.24);
+}
+
+/* BUILD 76 UI SYSTEM ---------------------------------------
+   interPhace component contract:
+   - Selector presentation is universal: .ui-selector-bank + .ui-selector-btn only.
+   - Selector behavior is semantic and lives in data-* hooks (data-ratio, data-wave,
+     data-env, data-eq, data-range, data-scale-id, data-render-content, etc.).
+   - Never use a feature name as a visual class merely to inherit appearance.
+   - JavaScript must query selector meaning through data-* hooks / data-selector-group,
+     not presentation classes such as .ui-selector-btn. The one exception is generic
+     infrastructure that intentionally addresses every selector (autosave/reset).
+   - .control owns standard vertical rhythm. Child sliders/readouts do not create
+     trailing spacing. Selector banks use the same rhythm as slider controls.
+   - Dynamic .control-value elements remain in place. JS owns their text, derived
+     calculations, preset/custom state, and dimming logic; CSS only defines appearance.
+   - .mod-title is the one subsection-header treatment.
+   - .divider is the one conceptual group separator; do not use it as arbitrary padding.
+   - Utility actions are visually distinct from selectors. Audition/Render remain
+     primary actions.
+   - Feature-specific selector CSS may change bank layout only when genuinely required;
+     it may not override selector font, padding, height, border, radius, or active state.
+   - Selector typography is intentionally compact sans-serif; do not inherit the rack mono font.
+   - Selector -> slider receives the single optical-spacing adjustment in the system.
+---------------------------------------------------------------- */
+
+:root {
+  --ui-space-label: 6px;
+  --ui-space-control: 18px;
+  --ui-space-group: 28px;
+  --ui-selector-gap: 8px;
+  --ui-selector-pad-y: 6px;
+  --ui-selector-pad-x: 12px;
+  --ui-selector-font: 12px;
+  --ui-selector-font-family: Arial, Helvetica, sans-serif;
+  --ui-radius: 3px;
+}
+
+/* Standard control module: left functional label + right readout + control body. */
+.control {
+  margin-bottom: var(--ui-space-control);
+}
+
+.control-top {
+  margin-bottom: var(--ui-space-label);
+}
+
+.control-label,
+.control-value {
+  line-height: 1.25;
+}
+
+/* Right-hand values can be literal, formatted, derived, or stateful.
+   Do not hide/recreate these nodes for layout purposes. */
+.control-value {
+  flex: 0 0 auto;
+}
+
+/* Standard subsection header. */
+.mod-title {
+  margin: 0 0 var(--ui-space-control);
+  padding: 0;
+  color: #aaa;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* One visual language for every selection bank. Legacy functional classes remain. */
+.ui-selector-btn {
+  appearance: none;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: var(--ui-radius);
+  color: #ccc;
+  padding: var(--ui-selector-pad-y) var(--ui-selector-pad-x);
+  font-family: var(--ui-selector-font-family);
+  font-size: var(--ui-selector-font);
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.ui-selector-btn.active,
+.ui-selector-btn[aria-pressed="true"] {
+  border-color: #0af;
+  color: #0af;
+}
+
+.ui-selector-btn:focus-visible,
+.utility-action-btn:focus-visible {
+  outline: 1px solid #0af;
+  outline-offset: 2px;
+}
+
+.ui-selector-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-selector-gap);
+  margin-bottom: var(--ui-space-control);
+}
+
+/* A selector bank nested inside a normal control does not add a second trailing margin. */
+.control > .ui-selector-bank {
+  margin-bottom: 0;
+}
+
+/* BUILD 74 OPTICAL RHYTHM
+   Selector -> slider is the one transition that needs a touch more breathing room.
+   Keep this structural and reusable; do not add feature-specific Pitch spacing. */
+.control:has(> .ui-selector-bank):has(+ .control > .control-body input[type="range"]) {
+  margin-bottom: calc(var(--ui-space-control) + 3px);
+}
+
+/* Dividers always mark conceptual groups with one standard spacing token. */
+.divider {
+  margin: var(--ui-space-group) 0;
+}
+
+.render-tools-divider {
+  margin: var(--ui-space-group) 0;
+}
+
+/* Patch-management actions intentionally differ from selectors. */
+.utility-action-btn {
+  width: 100%;
+  min-height: 38px;
+  background: #111;
+  border: 1px solid #444;
+  border-radius: var(--ui-radius);
+  color: #ccc;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.utility-action-btn:hover {
+  border-color: #666;
+  color: #eee;
+}
+
+.render-tool-btn.random-ack {
+  border-color: #0af;
+  color: #0af;
+  box-shadow: 0 0 10px rgba(0, 170, 255, 0.24);
+}
+
+@media (max-width: 600px) {
+  .ui-selector-btn,
+  .utility-action-btn {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .mod-title {
+    font-size: 14px;
+  }
+}
+
+/* Build 78: Render capability visibility only. */
+.render-content-group.is-hidden {
+  display: none;
+}
+
+/* BUILD 81 RENDER PROGRESS
+   Paint status into the existing divider -> Render gap without participating in layout.
+   Idle Build 81 is therefore geometrically identical to Build 80. */
+#render {
+  position: relative;
+}
+
+#render[data-render-status]::before {
+  content: attr(data-render-status);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(320px, 90vw);
+  color: #888;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+
+/* Shared top-row geometry: based on drumPhace */
+.instrument-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  min-height: 42px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  background: #111;
+  border-bottom: 1px solid #333;
+}
+
+.instrument-left,
+.instrument-right {
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: #eee;
+  white-space: nowrap;
+}
+
+.instrument-left {
+  justify-self: start;
+  font-weight: 650;
+}
+
+.instrument-right {
+  justify-self: end;
+  font-weight: 500;
+}
+
+/* drumPhace-style icon audition button; synthPhace keeps its blue */
+.instrument-header .play-btn {
+  justify-self: center;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  border: 1px solid #333;
+  border-radius: 50%;
+  background: transparent;
+  color: #0af;
+  font-size: 0;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.instrument-header .play-btn::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 10px solid currentColor;
+}
+
+.instrument-header .play-btn.playing::before {
+  width: 10px;
+  height: 10px;
+  margin-left: 0;
+  border: 0;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+/* Build 2: suite-wide bar alignment */
+html {
+  scrollbar-gutter: stable;
+}
+
+.app {
+  max-width: 980px;
+}
+
+.instrument-header {
+  grid-template-columns: 1fr 44px 1fr;
+  min-height: 42px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.instrument-header .play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.instrument-header .play-btn::before {
+  margin: 0 0 0 2px;
+}
+
+.instrument-header .play-btn.playing::before {
+  margin: 0;
+}
+
+.suite-nav-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(44px, 1fr));
+  gap: 6px;
+  align-items: stretch;
+  width: 100%;
+  min-height: 58px;
+  margin-top: 8px;
+  padding: 7px 0 max(8px, env(safe-area-inset-bottom));
+  background: #111;
+  border-top: 1px solid #333;
+}
+
+.suite-nav-btn {
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #333;
+  border-radius: 5px;
+  background: transparent;
+  color: #777;
+  text-decoration: none;
+}
+
+.suite-nav-btn.active {
+  color: #0af;
+  border-color: #0af;
+}
+
+.suite-nav-btn svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Build 3 suite shell */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.app {
+  width: min(100%, 980px);
+  max-width: 980px;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0 auto;
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr) 58px;
+  gap: 8px;
+}
+
+.instrument-header {
+  position: static;
+  min-height: 42px;
+  height: 42px;
+  padding: 0;
+  grid-template-columns: 1fr 44px 1fr;
+}
+
+.instrument-header .play-btn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+}
+
+.instrument-header .play-btn::before {
+  transform: translateX(1px);
+}
+
+.panel {
+  grid-row: 2;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.panel[hidden] {
+  display: none !important;
+}
+
+.panel.suite-section-active {
+  display: block;
+}
+
+.section-title {
+  display: none;
+}
+
+.panel-body {
+  display: block !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.suite-nav-bar {
+  position: static;
+  width: 100%;
+  min-height: 58px;
+  margin: 0;
+  padding: 7px 0 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  background: #111;
+  border-top: 1px solid #333;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+
+.suite-nav-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.suite-nav-btn {
+  flex: 1 0 48px;
+  min-width: 48px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.synth-section-btn {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.synth-section-btn.section-active {
+  color: #0af;
+  border-color: #0af;
+}
+
+@media (min-width: 760px) {
+  .app {
+    grid-template-rows: 46px minmax(0, 1fr) 62px;
+    gap: 10px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .instrument-header {
+    height: 46px;
+    min-height: 46px;
+  }
+
+  .suite-nav-bar {
+    min-height: 62px;
+  }
+}
+
+@media (max-width: 420px) {
+  .app {
+    grid-template-rows: 36px minmax(0, 1fr) 54px;
+    gap: 6px;
+  }
+
+  .instrument-header {
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .instrument-header .play-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+  }
+
+  .suite-nav-bar {
+    min-height: 54px;
+    gap: 4px;
+    padding-top: 5px;
+  }
+
+  .suite-nav-btn {
+    flex-basis: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Build 4: stable shared shell geometry */
+.instrument-header,
+.suite-nav-bar {
+  box-sizing: border-box;
+}
+
+.suite-nav-bar {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.suite-nav-btn {
+  flex: 1 0 72px;
+  min-width: 72px;
+}
+
+.synth-section-btn {
+  text-transform: none;
+}
+
+.panel {
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+.panel[hidden] {
+  display: none !important;
+}
+
+.instrument-header .play-btn::after {
+  content: none;
+}
+
+.instrument-header .play-btn.playing::before {
+  width: 10px;
+  height: 10px;
+  margin: 0;
+  border: 0;
+  background: currentColor;
+  transform: none;
+}
+
+/* Build 5: synth bottom row = section buttons */
+.panel .panel-header {
+  display: none !important;
+}
+
+.panel-body {
+  display: block;
+  max-height: none;
+  overflow: visible;
+}
+
+.suite-nav-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.suite-nav-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.suite-nav-btn {
+  flex: 0 0 auto;
+  min-width: 76px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 5px;
+}
+
+.synth-section-btn.section-active {
+  color: #0af;
+  border-color: #0af;
+}
+
+/* Build 6: true three-row synth shell */
+.app {
+  display: grid !important;
+  grid-template-rows: 42px minmax(0, 1fr) 58px !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.instrument-header { grid-row: 1 !important; }
+.panel {
+  grid-row: 2 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+#suiteNavBar {
+  grid-row: 3 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  touch-action: pan-y !important;
+}
+#suiteNavBar .synth-section-btn {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  min-width: 76px !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+@media (min-width:760px){
+  .app { grid-template-rows:46px minmax(0,1fr) 62px !important; }
+}
+@media (max-width:420px){
+  .app { grid-template-rows:36px minmax(0,1fr) 54px !important; }
+}
+
+/* Build 8 shared shell overrides */
+.app.shell-app {
+  padding: 0 !important;
+}
+.app.shell-app .panel {
+  grid-row: 2 !important;
+  min-height: 0 !important;
+}
+.shell-bottom-main .synth-section-btn {
+  width: 100%;
+  min-width: 0 !important;
+  padding: 0 4px !important;
+  font-size: 10px;
+}
+
+/* Build 9: shared shell owns geometry */
+#appShell.shell-app {
+  max-width: var(--shell-max-width) !important;
+}
+.shell-middle {
+  min-height: 0;
+  overflow: hidden;
+}
+.shell-middle .panel {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0;
+}
+.shell-middle .panel[hidden] {
+  display: none !important;
+}
+.shell-middle .panel .panel-header {
+  display: none !important;
+}
+.shell-middle .panel-body {
+  display: block;
+  max-height: none;
+  overflow: visible;
+}
+.shell-bottom-main .synth-section-btn {
+  width: 100%;
+  min-width: 0 !important;
+  padding: 0 4px !important;
+  font-size: 10px;
+}
+
+/* Build 10: shared audition button is the real synth #play control */
+#play.shell-audition {
+  display: grid !important;
+  place-items: center !important;
+  font-size: 0 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  padding: 0 !important;
+}
+
+#play.shell-audition .play-icon,
+#play.shell-audition .stop-icon {
+  display: none;
+}
+
+#play.shell-audition:not(.playing) .play-icon {
+  display: block;
+}
+
+#play.shell-audition.playing .stop-icon {
+  display: block;
+}
+
+/* Build 11: nine-button transitional row */
+.shell-bottom-main { grid-template-columns: repeat(9, minmax(0, 1fr)) !important; }
+.shell-bottom-main .synth-section-btn { padding-left: 2px !important; padding-right: 2px !important; font-size: 9px !important; }
+.shell-bottom-main #bottomBtn9 { padding: 0 !important; }

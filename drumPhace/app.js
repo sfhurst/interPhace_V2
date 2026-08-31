@@ -1898,7 +1898,6 @@ function pasteDrumColumn(targetCol) {
     return;
   }
 
-  if (auditionState !== "idle") stopAudition();
 
   for (let row = 0; row < ROWS; row++) {
     patternState[copy.type][row][col] = copy.pattern[row];
@@ -2362,7 +2361,6 @@ function renderActiveDrumGrid() {
     ariaLabelForCell: ({ row, col, context }) =>
       `${context} bar ${col + 1}, step ${row + 1}`,
     onCellPress: ({ row, col, value, context }) => {
-      if (auditionState !== "idle" && context === currentPage) stopAudition();
       const next = value === "off" ? "on" : value === "on" ? "ghost" : "off";
       if (next === "off") {
         variationState[context].chance[row][col] = null;
@@ -2436,7 +2434,6 @@ function writeHamptonBars(type, startCol, bars) {
 }
 
 function randomizeHamptonGrid(type) {
-  if (auditionState !== "idle" && type === currentPage) stopAudition();
 
   // Generate each four-bar half normally. On an 8-column display, preserve
   // two strong landmarks across the phrase: bar 5 repeats bar 1 exactly and
@@ -2478,7 +2475,6 @@ function randomizeGrid(type) {
     return;
   }
 
-  if (auditionState !== "idle" && type === currentPage) stopAudition();
   const selectedStyle = currentStyle[type];
   const actualStyle = resolveStyle(selectedStyle);
   const engine = engines[type][actualStyle]["32"];
@@ -2647,7 +2643,6 @@ function showCurrentGrid() {
 }
 
 function switchPage(page) {
-  if (auditionState !== "idle") stopAudition();
   cancelDrumColumnCopy({ rerender: false });
   currentPage = page;
   showCurrentGrid();
@@ -2968,7 +2963,6 @@ generateBtn.addEventListener("click", () => {
 
 
 function clearCurrentGrid() {
-  if (auditionState !== "idle") stopAudition();
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < MAX_COLS; col++) {
       patternState[currentPage][row][col] = "off";
@@ -2998,6 +2992,11 @@ function notifyAuditionState() {
 function updateAuditionColor() {
   auditionBtn.dataset.colorMode = currentPage;
 }
+
+// Build 484: local audition survives all drumPhace page changes and edits.
+// It stops only when the user stops it or leaves drumPhace.
+window.addEventListener("pagehide", stopAudition);
+window.addEventListener("beforeunload", stopAudition, { once: true });
 
 function stopAudition() {
   auditionGeneration += 1;
@@ -3846,7 +3845,6 @@ async function startAudition(mode = "active") {
 
     if (
       generation !== auditionGeneration ||
-      currentPage !== renderPage ||
       auditionState !== "rendering"
     ) {
       stopAudition();
@@ -3859,7 +3857,6 @@ async function startAudition(mode = "active") {
 
     if (
       generation !== auditionGeneration ||
-      currentPage !== renderPage ||
       auditionState !== "rendering"
     ) {
       stopAudition();

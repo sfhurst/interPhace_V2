@@ -689,3 +689,104 @@ input[type="range"]:focus-visible::-moz-range-thumb {
     0 0 0 3px color-mix(in srgb, currentColor 18%, transparent),
     0 0 9px color-mix(in srgb, currentColor 70%, transparent);
 }
+
+/* Build 486: unified interPhace slider geometry.
+   All Phaces share one title + 8-slot control system.
+   Background grids remain full-width; only the control panel receives the touch-safe inset. */
+:root {
+  --interphace-control-inset: 12px;
+  --interphace-title-gap: 10px;
+  --interphace-slider-label-gap: 7px;
+}
+
+.drum-synth-stage {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+.drum-synth-panel {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 16px var(--interphace-control-inset) 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  row-gap: var(--interphace-title-gap);
+  align-content: stretch;
+}
+
+.drum-synth-title {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  align-self: start;
+}
+
+.drum-synth-controls {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  grid-auto-flow: row;
+  gap: 0;
+  align-items: stretch;
+  align-content: stretch;
+}
+
+.macroControl {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label value"
+    "slider slider";
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: var(--interphace-slider-label-gap);
+  align-content: center;
+  align-items: center;
+}
+
+.macroSlider,
+.presetSlider {
+  grid-area: slider;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* Give iPhone fingers a larger vertical hit area without changing the visible track. */
+.macroSlider {
+  min-height: 28px;
+}
+
+@media (max-width: 420px) {
+  .drum-synth-panel {
+    padding-left: var(--interphace-control-inset);
+    padding-right: var(--interphace-control-inset);
+  }
+
+  .drum-synth-controls {
+    gap: 0;
+  }
+
+  .macroControl {
+    column-gap: 10px;
+    row-gap: var(--interphace-slider-label-gap);
+  }
+}

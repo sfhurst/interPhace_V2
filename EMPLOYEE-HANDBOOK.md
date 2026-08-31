@@ -15,6 +15,13 @@
 - Audit the completed build for regressions caused by the build before delivery.
 - Do not add build-specific audit/changelog markdown files unless explicitly requested.
 
+### Build 484 — persistent local Phace audition
+- Local audition persists across all page/view/instrument/phrase changes and edits while the user remains inside the same Phace.
+- Edits must not implicitly press Stop. A render-first Phace may continue playing the already-rendered buffer until the user explicitly restarts audition.
+- The center Audition/Stop control remains the explicit local stop control.
+- Leaving the current Phace always stops that Phace's local audition. Local audition never follows the user into another Phace.
+- This rule applies to synthPhace, drumPhace, arpPhace, dronePhace, and noisePhace.
+
 ## Shared shell
 - The top row is 100% recycled and always contains exactly three items: left Phace nameplate, center audition button, right `hurst.audio` nameplate. Phaces change content/behavior, not the top-row structure.
 - The bottom row contains exactly six recycled buttons: `shellB1` through `shellB6`.
@@ -839,7 +846,7 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 
 ### arpPhace B2 Audition
 - Center Audition on B2 is a page-local looping arp audition. It plays only the current A1-A4 arp page.
-- Audition toggles Play/Stop. Cycling arp pages or leaving B2 stops playback.
+- Audition toggles Play/Stop. Cycling arp pages, switching between B1/B2/B3/B4, changing M1-M4/A1-A4, or editing/generating inside arpPhace does not stop the current audition. Leaving arpPhace stops it.
 - B1/B3 Audition belongs to the Melody sequencer and remains separate.
 - The audio engine receives already-constructed Pattern event offsets; Rate and Motion do not operate as additional realtime transforms during rendering.
 - Root offset `0` is the global interPhace Root MIDI note. `+12` and `-12` are octave offsets.
@@ -934,7 +941,7 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 ### Build 221 — drumPhace B2 isolated audition
 - On drumPhace B2 Synth pages, the shell Audition button renders and loops only the currently active drum instrument's visible pattern.
 - Kick B2 auditions Kick only; Snare B2 auditions Snare only; Hat B2 auditions Closed Hat only.
-- The render is frozen once playback begins. B2 slider edits do not alter the playing loop; Stop and Audition again to hear the new settings.
+- The render is frozen once playback begins. B2 slider edits do not alter the playing loop, but they also do not stop it; Stop and Audition again when you want to hear the newly edited render.
 - Other drumPhace pages retain the existing full-kit audition behavior.
 
 ### Build 270 — per-Phace documentation ownership
@@ -950,3 +957,12 @@ On drumPhace B1 Pattern pages, long-pressing a row-1 bar step retains the existi
 ## Build 333 — arpPhace B2 controls locked
 
 arpPhace B2 target controls are now locked as: Sparse = Variation / Space / Repetition / Movement; Motif = Complexity / Space / Repetition / Movement; Arp = Rate / Gate / Pattern / Motion; Phrase = Complexity / Space / Resolution / Movement. These are musical bias controls; Style owns low-level event count, placement, pitch/range/interval and rhythm tendencies. Gate behavior is generator-specific: Sparse mostly long/open, Motif varying gate as part of the repeating motif, Arp steady global Gate, Phrase varying contextual gate. B3 remains the per-note Chance/Volume/Gate override layer. Implementation remains for a later build.
+
+
+## Build 486 — Unified Slider Geometry
+- Slider-bearing pages across all active Phaces now use one shared visual layout.
+- The page title has a reserved row; the remaining control area is divided into eight equal vertical slots.
+- Pages with fewer than eight sliders occupy the upper slots without changing slider-to-slider spacing.
+- arpPhace B2's four sliders therefore occupy exactly the upper half of the standard control area.
+- Slider panels use a 12 px left/right touch-safe inset on iPhone while background grids remain full-width.
+- Per-Phace legacy spacing rules remain in their historical CSS but are superseded by the shared shell rule.
