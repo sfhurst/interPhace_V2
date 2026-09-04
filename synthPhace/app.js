@@ -189,6 +189,10 @@
   function render() {
     const activeId = activePageId();
     pages.forEach((page) => page.classList.toggle("hidden", page.id !== activeId));
+    // A canvas measured while its page is display:none has no usable geometry.
+    // Redraw only after B4 P3 becomes visible so a stored envelope always
+    // returns at the real chassis size after navigating back to synthPhace.
+    if (activeId === "app2_b4_p3") requestAnimationFrame(redrawDrawnEnvelope);
     buttons.forEach((button, index) => {
       if (!button) return;
       button.classList.toggle("active", index + 1 === state.button && index + 1 <= 4);
@@ -376,6 +380,7 @@
       case "hold2":
       case "decay2": return (v) => formatSeconds(v * currentMultiplier());
       case "drawnEnvelopeLength": return (v) => `${trimNumber(v, 2)}s`;
+      case "drawnEnvelopeSmoothing": return (v) => `${Math.round(v)}%`;
       case "decayPercent": return (v) => `${Math.round(v)}%`;
       case "timeMultiplier": return (v) => `${trimNumber(v, 2)}×`;
       case "envelopePreset": return (v) => {
@@ -1061,8 +1066,12 @@
   const drawnArea = document.getElementById("app2_b4_p3_drawArea");
   const drawnCanvas = document.getElementById("app2_b4_p3_canvas");
   const drawnLength = document.getElementById("app2_b4_p3_length");
+  const drawnSmoothing = document.getElementById("app2_b4_p3_smoothing");
   state.drawnEnvelope = state.drawnEnvelope && typeof state.drawnEnvelope === "object"
     ? state.drawnEnvelope : { valid: false, curve: [] };
+  if (!Array.isArray(state.drawnEnvelope.baseCurve) && Array.isArray(state.drawnEnvelope.curve)) {
+    state.drawnEnvelope.baseCurve = state.drawnEnvelope.curve.slice();
+  }
   let drawing = null;
 
   function drawnMetrics() {
@@ -1073,7 +1082,10 @@
 
   function redrawDrawnEnvelope() {
     if (!drawnCanvas || !drawnArea) return;
-    const metrics = drawnMetrics(); if (!metrics) return;
+    const metrics = drawnMetrics();
+    // Preserve the last valid backing canvas while B4 P3 is hidden. Without
+    // this guard, an initial hidden-page redraw shrinks it to 1×1.
+    if (!metrics || metrics.rect.width < 1 || metrics.rect.height < 1) return;
     const ratio = Math.max(1, window.devicePixelRatio || 1);
     drawnCanvas.width = Math.round(metrics.rect.width * ratio);
     drawnCanvas.height = Math.round(metrics.rect.height * ratio);
@@ -1101,7 +1113,7 @@
     return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)), metrics };
   }
 
-  function smoothDrawnCurve(points, count = 128) {
+  function sampleDrawnCurve(points, count = 128) {
     const sampled = [];
     for (let index = 0; index < count; index += 1) {
       const x = index / (count - 1); let right = points.findIndex(point => point[0] >= x);
@@ -1109,19 +1121,26 @@
       const a = points[left], b = points[right]; const span = Math.max(.00001, b[0] - a[0]);
       sampled.push(a[1] + (b[1] - a[1]) * Math.max(0, Math.min(1, (x - a[0]) / span)));
     }
-    const smooth = sampled.map((_, index) => {
+    sampled[0] = 0; sampled[sampled.length - 1] = 0;
+    return sampled;
+  }
+
+  function resolveDrawnCurve(baseCurve, smoothingPercent) {
+    const amount = Math.max(0, Math.min(1, Number(smoothingPercent) / 100 || 0));
+    const smooth = baseCurve.map((_, index) => {
       let sum = 0, used = 0;
-      for (let offset = -2; offset <= 2; offset += 1) { const value = sampled[index + offset]; if (value !== undefined) { sum += value; used += 1; } }
+      for (let offset = -2; offset <= 2; offset += 1) { const value = baseCurve[index + offset]; if (value !== undefined) { sum += value; used += 1; } }
       return Math.max(0, Math.min(1, sum / used));
     });
-    smooth[0] = 0; smooth[smooth.length - 1] = 0;
-    const peak = Math.max(...smooth);
+    const blended = baseCurve.map((value, index) => value * (1 - amount) + smooth[index] * amount);
+    blended[0] = 0; blended[blended.length - 1] = 0;
+    const peak = Math.max(...blended);
     // Normalize after correction/smoothing, not before: the drawn shape stays
     // intact while every successful contour reaches a consistent full peak.
     if (peak > .0001) {
-      for (let index = 1; index < smooth.length - 1; index += 1) smooth[index] = Math.min(1, smooth[index] / peak);
+      for (let index = 1; index < blended.length - 1; index += 1) blended[index] = Math.min(1, blended[index] / peak);
     }
-    return smooth;
+    return blended;
   }
 
   if (drawnArea && drawnCanvas) {
@@ -1130,7 +1149,7 @@
       const distance = Math.hypot(event.clientX - (point.metrics.rect.left + point.metrics.pad), event.clientY - (point.metrics.rect.top + point.metrics.rect.height - point.metrics.pad));
       if (distance > 28) return;
       event.preventDefault(); drawnArea.setPointerCapture?.(event.pointerId);
-      state.drawnEnvelope = { valid: false, curve: [] };
+      state.drawnEnvelope = { valid: false, baseCurve: [], curve: [] };
       drawing = { pointerId: event.pointerId, points: [[0, 0]] };
       save(); redrawDrawnEnvelope();
     });
@@ -1148,8 +1167,9 @@
       const endDistance = metrics ? Math.hypot(event.clientX - (metrics.rect.left + metrics.rect.width - metrics.pad), event.clientY - (metrics.rect.top + metrics.rect.height - metrics.pad)) : Infinity;
       if (endDistance <= 28) {
         drawing.points.push([1, 0]);
-        state.drawnEnvelope = { valid: true, curve: smoothDrawnCurve(drawing.points) };
-      } else state.drawnEnvelope = { valid: false, curve: [] };
+        const baseCurve = sampleDrawnCurve(drawing.points);
+        state.drawnEnvelope = { valid: true, baseCurve, curve: resolveDrawnCurve(baseCurve, drawnSmoothing?.value ?? 100) };
+      } else state.drawnEnvelope = { valid: false, baseCurve: [], curve: [] };
       drawing = null; save(); redrawDrawnEnvelope();
     };
     drawnArea.addEventListener("pointerup", finishDraw);
@@ -1157,6 +1177,11 @@
     window.addEventListener("resize", redrawDrawnEnvelope);
     requestAnimationFrame(redrawDrawnEnvelope);
   }
+  drawnSmoothing?.addEventListener("input", event => {
+    if (!state.drawnEnvelope.valid || !Array.isArray(state.drawnEnvelope.baseCurve)) return;
+    state.drawnEnvelope.curve = resolveDrawnCurve(state.drawnEnvelope.baseCurve, event.target.value);
+    save(); redrawDrawnEnvelope();
+  });
 
 
   const patchPresetSlider = document.getElementById("app2_b1_p1_patchPreset");

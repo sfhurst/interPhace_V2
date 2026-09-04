@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0c0d0f" />
     <title>interPhace - synthPhace</title>
-    <link rel="stylesheet" href="style.css?v=517" />
+    <link rel="stylesheet" href="style.css?v=519" />
     <link rel="stylesheet" href="../shared/shell.css?v=508" />
     <script src="../shared/shell.js?v=499" defer></script>
     <script src="control-data.js" defer></script>
-    <script src="patch-adapter.js?v=517" defer></script>
-    <script src="app.js?v=517" defer></script>
+    <script src="patch-adapter.js?v=519" defer></script>
+    <script src="app.js?v=520" defer></script>
     <script src="audio/audio-math.js" defer></script>
     <script src="audio/personality/personality-authoring.js" defer></script>
     <script src="audio/personality/instrument-behaviors.js" defer></script>
@@ -192,17 +192,21 @@
           </div>
         </div></section>
 
-        <section id="app2_b4_p3" class="synth-page drum-synth-stage hidden" data-page-key="drawn-envelope" aria-label="Drawn envelope"><div class="drum-synth-panel drawn-envelope-panel">
-          <div class="page-title drum-synth-title">drawn envelope</div>
-          <div class="control-stack drum-synth-controls">
+        <section id="app2_b4_p3" class="synth-page drum-synth-stage synth-drawn-envelope-page hidden" data-page-key="drawn-envelope" aria-label="Drawn envelope">
+          <div id="app2_b4_p3_grid" class="backgroundSelectionGrid synthDrawnEnvelopeGrid" aria-hidden="true"></div>
+          <div class="synth-drawn-envelope-content drum-synth-panel">
+            <div class="page-title drum-synth-title">drawn envelope</div>
+            <div class="control-stack drum-synth-controls">
             <label class="macroControl"><span class="macroLabel">Length</span><input class="macroSlider" id="app2_b4_p3_length" type="range" min="0.02" max="20" value="2" data-name="drawnEnvelopeLength" step="0.02" /><span id="app2_b4_p3_length_value" class="macroValue">2s</span></label>
+            <label class="macroControl"><span class="macroLabel">Smoothing</span><input class="macroSlider" id="app2_b4_p3_smoothing" type="range" min="0" max="100" value="100" data-name="drawnEnvelopeSmoothing" step="1" /><span id="app2_b4_p3_smoothing_value" class="macroValue">100%</span></label>
+              <div id="app2_b4_p3_drawArea" class="drawn-envelope-area" aria-label="Draw an amplitude envelope from start to end">
+                <canvas id="app2_b4_p3_canvas" class="drawn-envelope-canvas"></canvas>
+                <span class="drawn-envelope-anchor drawn-envelope-start" aria-hidden="true"></span>
+                <span class="drawn-envelope-anchor drawn-envelope-end" aria-hidden="true"></span>
+              </div>
+            </div>
           </div>
-          <div id="app2_b4_p3_drawArea" class="drawn-envelope-area" aria-label="Draw an amplitude envelope from start to end">
-            <canvas id="app2_b4_p3_canvas" class="drawn-envelope-canvas"></canvas>
-            <span class="drawn-envelope-anchor drawn-envelope-start" aria-hidden="true"></span>
-            <span class="drawn-envelope-anchor drawn-envelope-end" aria-hidden="true"></span>
-          </div>
-        </div></section>
+        </section>
       </section>
 
       <nav id="shellBottom" class="shell-bottom" aria-label="synthPhace controls">

@@ -102,18 +102,23 @@ button, input { font: inherit; }
 
 .macroValue.preset-modified { opacity: 0.42; }
 
-/* FM B4 P3: a deliberately single-purpose freeform control. It remains inside
-   the normal panel chassis and never changes global slider or grid geometry. */
-.drawn-envelope-panel { gap: 14px; }
+/* FM B4 P3 keeps the standard synth chassis. Its drawing surface occupies
+   control slots three through eight over the normal background-grid layer. */
+.synth-drawn-envelope-page { position: relative; padding: 0; overflow: hidden; }
+.synth-drawn-envelope-content { position: relative; z-index: 2; pointer-events: none; }
+.synth-drawn-envelope-content .drum-synth-controls { position: relative; }
+.synth-drawn-envelope-content .macroControl,
+.synth-drawn-envelope-content input { pointer-events: auto; }
 .drawn-envelope-area {
-  position: relative;
-  width: 100%;
-  height: clamp(210px, 33vh, 300px);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--panel) 86%, var(--bg));
+  position: absolute;
+  z-index: 3;
+  left: calc(0px - var(--interphace-control-inset));
+  right: calc(0px - var(--interphace-control-inset));
+  top: calc(25% - 4px);
+  bottom: 0;
   touch-action: none;
   overflow: hidden;
+  pointer-events: auto;
 }
 .drawn-envelope-canvas { position: absolute; inset: 0; display: block; }
 .drawn-envelope-anchor {
