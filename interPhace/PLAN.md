@@ -1,8 +1,8 @@
 # interPhace Plan
 
-## Current position — Build 291
+## Current position — Build 500
 
-The shell is established and functional. Global project context, mixer, import/export, child settings, Phace navigation, and render-first global audition exist. Build 273 wires the Mixer into audition: muted channels are skipped before render; active channel dB values affect playback. Drum and Synth/Arp retain their musical loop lengths while Drone and Noise run as independent 30-second bed renders from their child engines, with the shared transport overlapping successive copies by 3 seconds to hide the seam.
+The shell is established and functional. The first direct interPhace load in a browser tab session begins on the non-button startup splash while preserving the normal shared top and bottom rows; reloads restore the current persisted interPhace page, and a newly opened tab begins on the splash again. Each child Phace has eight silent local-only snapshots: B6 hold saves its complete local state, tap restores, and snapshot hold clears and compacts the slots. Global project context, mixer, import/export, child settings, Phace navigation, and render-first global audition exist. Build 273 wires the Mixer into audition: muted channels are skipped before render; active channel dB values affect playback. Drum and Synth/Arp retain their musical loop lengths while Drone and Noise run as independent 30-second bed renders from their child engines, with the shared transport overlapping successive copies by 3 seconds to hide the seam.
 
 ## Next major work
 

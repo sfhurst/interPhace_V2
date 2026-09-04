@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const pages = Array.from(document.querySelectorAll(".app1-page"));
   const buttons = [1, 2, 3, 4, 5].map((number) => document.getElementById(`shellB${number}`));
   const STORAGE_KEY = "interPhace.interPhace.ui.v2";
+  const STARTUP_SESSION_KEY = "interPhace.interPhace.startupSplashSeen.v1";
   const ROOTS = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
   const SCALES = ["Major", "Minor", "Dorian", "Major Pentatonic", "Minor Pentatonic", "Hirajoshi"];
   const MIXER_MIN_DB = -60;
@@ -41,7 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let state = {
-    button: 1,
+    button: 0,
     b2Page: 1,
     b5Page: 1,
     project: { name: "", root: 60, scale: 0, scaleOrderVersion: 2, tempo: 75, length: 4, swing: 0, timing: 0 },
@@ -51,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
     sequencer: Array.from({ length: 16 }, () => Array(4).fill("")),
     child: {
       synthTiming: 100,
+      synthEngine: "fm",
       synthLoopLength: 4,
       synthAuditionLoop: false,
       synthAuditionLength: 6,
@@ -87,7 +89,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   } catch (_) {}
 
-  if (!Number.isInteger(state.button) || state.button < 1 || state.button > 5) state.button = 1;
+  let startupSplashSeen = false;
+  try {
+    startupSplashSeen = sessionStorage.getItem(STARTUP_SESSION_KEY) === "1";
+    sessionStorage.setItem(STARTUP_SESSION_KEY, "1");
+  } catch (_) {}
+
+  const entryUrl = new URL(window.location.href);
+  const contextualSettingsPage = Number(entryUrl.searchParams.get("settings"));
+  if (Number.isInteger(contextualSettingsPage) && contextualSettingsPage >= 1 && contextualSettingsPage <= 5) {
+    state.button = 5;
+    state.b5Page = contextualSettingsPage;
+    entryUrl.searchParams.delete("settings");
+    window.history.replaceState(null, "", `${entryUrl.pathname}${entryUrl.search}${entryUrl.hash}`);
+  } else if (!startupSplashSeen) {
+    state.button = 0;
+  }
+
+  if (!Number.isInteger(state.button) || state.button < 0 || state.button > 5) state.button = 0;
   if (!Number.isInteger(state.b2Page) || state.b2Page < 1 || state.b2Page > 2) state.b2Page = 1;
   if (!Number.isInteger(state.b5Page) || state.b5Page < 1 || state.b5Page > 5) state.b5Page = 1;
   state.mixer.droneNoiseLink = state.mixer.droneNoiseLink === true;
@@ -932,6 +951,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("beforeunload", stopGlobalAudition, { once: true });
 
   function activePageId() {
+    if (state.button === 0) return "app1_startup";
     if (state.button === 2) return `app1_b2_p${state.b2Page}`;
     return state.button === 5 ? `app1_b5_p${state.b5Page}` : `app1_b${state.button}_p1`;
   }
@@ -1013,6 +1033,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const arpTriggerToggle = document.getElementById("app1_b2_p1_arpTrigger");
     if (arpTriggerToggle) arpTriggerToggle.checked = state.child.synthUseArpTrigger === true;
 
+    const useArpPlayback = state.child.synthUseArpTrigger === true;
+    const synthMixerControl = document.getElementById("app1_b2_p1_synth")?.closest(".mixerChannel");
+    const synthMixerLabel = document.getElementById("app1_b2_p1_synth_label");
+    const synthMixerSlider = document.getElementById("app1_b2_p1_synth");
+    if (synthMixerControl) {
+      synthMixerControl.classList.toggle("mixerChannel-arp", useArpPlayback);
+      synthMixerControl.classList.toggle("mixerChannel-synth", !useArpPlayback);
+    }
+    if (synthMixerLabel) synthMixerLabel.textContent = useArpPlayback ? "Arp" : "Synth";
+    if (synthMixerSlider) synthMixerSlider.setAttribute("aria-label", `${useArpPlayback ? "Arp" : "Synth"} mixer level`);
+
     const droneNoiseLinkToggle = document.getElementById("app1_b2_p1_droneNoiseLink");
     if (droneNoiseLinkToggle) droneNoiseLinkToggle.checked = state.mixer.droneNoiseLink === true;
   }
@@ -1030,6 +1061,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.child.synthUseArpTrigger = state.child.synthUseArpTrigger === true;
     state.child.synthEffectsRelease = normalizeEffectsReleaseMs(synthRelease, 120);
     state.child.arpEffectsRelease = normalizeEffectsReleaseMs(arpRelease, 30);
+    state.child.synthEngine = state.child.synthEngine === "pretty" ? "pretty" : "fm";
   }
 
   state.child.synthAuditionLength = Number(state.child.synthAuditionLength);
@@ -1074,6 +1106,8 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById(`${id}_value`).textContent = text;
     });
     document.getElementById("app1_b5_p1_auditionLoop").checked = !!state.child.synthAuditionLoop;
+    const synthEngineToggle = document.getElementById("app1_b5_p1_synthEngine");
+    if (synthEngineToggle) synthEngineToggle.checked = state.child.synthEngine === "pretty";
     document.getElementById("app1_b5_p2_otherInstrumentBorders").checked = !!state.child.drumBorders;
     const arpToneToggle = document.getElementById("app1_b5_p3_arpTone");
     if (arpToneToggle) arpToneToggle.checked = state.child.arpTone !== false;
@@ -1179,6 +1213,30 @@ document.addEventListener("DOMContentLoaded", () => {
     state.sequencer[row][col] = value;
     save();
     renderInterSequencerGrid();
+  }
+
+  function nextInterSequencerCellValue(row, col) {
+    for (let priorRow = row - 1; priorRow >= 0; priorRow -= 1) {
+      const prior = parseSequencerCell(state.sequencer[priorRow][col], col);
+      if (!prior) continue;
+
+      if (col === 0) {
+        if (prior.bar < 8) return `M${prior.melody}.${prior.bar + 1}`;
+        return `M${prior.melody === 4 ? 1 : prior.melody + 1}.1`;
+      }
+
+      return `${["", "K", "S", "H"][col]}${prior.bar === 8 ? 1 : prior.bar + 1}`;
+    }
+
+    return col === 0 ? "M1.1" : `${["", "K", "S", "H"][col]}1`;
+  }
+
+  function smartEnterInterSequencerCell(row, col) {
+    state.sequencer[row][col] = nextInterSequencerCellValue(row, col);
+    save();
+    renderInterSequencerGrid();
+    const cell = document.querySelector(`.interSequencerCell[data-row="${row}"][data-col="${col}"]`);
+    renderInterSequencerEntryChooser(cell);
   }
 
   function renderInterSequencerEntryChooser(anchorButton) {
@@ -1314,7 +1372,8 @@ document.addEventListener("DOMContentLoaded", () => {
           attachInterSequencerClearHold(button, row, col);
           button.addEventListener("click", () => {
             if (performance.now() < interSequencerSuppressClickUntil) return;
-            renderInterSequencerEntryChooser(button);
+            if (value) renderInterSequencerEntryChooser(button);
+            else smartEnterInterSequencerCell(row, col);
           });
         } else {
           button.disabled = true;
@@ -1357,7 +1416,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let interSequencerClearFrame = 0;
   let interSequencerClearStart = 0;
   let interSequencerClearFired = false;
-  const INTER_SEQUENCER_CLEAR_MS = 650;
+  const INTER_SEQUENCER_CLEAR_MS = 900;
+  const INTER_SEQUENCER_CLEAR_FILL_DELAY_MS = 200;
   const interB2Button = buttons[1];
 
   function setInterSequencerClearFill(percent) {
@@ -1377,7 +1437,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateInterSequencerClearFill(now) {
     if (interSequencerClearTimer === null || interSequencerClearFired) return;
-    setInterSequencerClearFill(((now - interSequencerClearStart) / INTER_SEQUENCER_CLEAR_MS) * 100);
+    setInterSequencerClearFill(Math.max(0, ((now - interSequencerClearStart - INTER_SEQUENCER_CLEAR_FILL_DELAY_MS) / (INTER_SEQUENCER_CLEAR_MS - INTER_SEQUENCER_CLEAR_FILL_DELAY_MS)) * 100));
     interSequencerClearFrame = requestAnimationFrame(updateInterSequencerClearFill);
   }
 
@@ -1519,6 +1579,19 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("app1_b5_p1_auditionLoop")?.addEventListener("change", (event) => { state.child.synthAuditionLoop = event.target.checked; save(); });
+  document.getElementById("app1_b5_p1_synthEngine")?.addEventListener("change", (event) => {
+    state.child.synthEngine = event.target.checked ? "pretty" : "fm";
+    try {
+      const key = "interPhace.synthPhace.patch.v1";
+      const patch = JSON.parse(localStorage.getItem(key) || "null");
+      if (patch && typeof patch === "object") {
+        patch.synth ||= {};
+        patch.synth.engine = { ...(patch.synth.engine || {}), mode: state.child.synthEngine };
+        localStorage.setItem(key, JSON.stringify(patch));
+      }
+    } catch (_) {}
+    save();
+  });
   document.getElementById("app1_b5_p2_otherInstrumentBorders")?.addEventListener("change", (event) => {
     state.child.drumBorders = event.target.checked;
     save();
@@ -1692,7 +1765,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const newButton = container.querySelector(".utilityAction");
 
       if (newButton) {
-        const NEW_HOLD_MS = 1200;
+        const NEW_HOLD_MS = 900;
         let newHoldTimer = null;
         let newFillFrame = 0;
         let newHoldStart = 0;
@@ -1800,7 +1873,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const progressCell = container.querySelector(".utilityProgress");
 
       if (exportButton) {
-        const EXPORT_HOLD_MS = 1200;
+        const EXPORT_HOLD_MS = 900;
         let exportHoldTimer = null;
         let exportFillFrame = 0;
         let exportHoldStart = 0;
@@ -1813,9 +1886,15 @@ document.addEventListener("DOMContentLoaded", () => {
           exportButton.style.setProperty("--export-fill", `${clamped}%`);
         };
 
+        let exportProgressDone = 0;
+        let exportProgressTotal = 0;
         const setExportProgress = (done = 0, total = 0, label = "") => {
           if (!progressCell) return;
-          progressCell.textContent = total > 0 ? `${done} / ${total}` : label;
+          exportProgressDone = done;
+          exportProgressTotal = total;
+          progressCell.textContent = total > 0
+            ? `${done} / ${total}${label ? `  •  ${label}` : ""}`
+            : label;
           progressCell.title = label || (total > 0 ? `${done} of ${total} files rendered` : "");
         };
 
@@ -1850,9 +1929,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const total = countAudioConstructionFiles(container);
             setExportProgress(0, total, total ? "Rendering audio" : "Preparing export");
             await exportCurrentProject(container, {
-              onAudioProgress(done, progressTotal) {
-                setExportProgress(done, progressTotal, "Rendering audio");
+              onAudioProgress(done, progressTotal, label) {
+                setExportProgress(done, progressTotal, label || "Rendering audio");
               },
+              onStage(label) { setExportProgress(exportProgressDone, exportProgressTotal, label); },
             });
             setExportProgress(total, total, total ? "Complete" : "Complete");
           } catch (error) {
@@ -2693,12 +2773,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const base=`${folder}audio/`;
     const totalFiles = countAudioConstructionFiles(container);
     let completedFiles = 0;
+    const report = (label) => {
+      try { onProgress?.(completedFiles, totalFiles, label); } catch (_) {}
+    };
 
-    const add=(name,buffer)=>{
+    const add=(name,buffer,label=name)=>{
       if(!buffer?.length) return false;
       files.push({name:`${base}${name}`,data:audioBufferToWavBytes(buffer)});
       completedFiles += 1;
-      try { onProgress?.(completedFiles, totalFiles); } catch (_) {}
+      report(label);
       return true;
     };
 
@@ -2709,33 +2792,41 @@ document.addEventListener("DOMContentLoaded", () => {
         ["kick","snare","hat"].filter(k=>selected.has(k));
       for (const type of types) {
         for (const ghost of [false,true]) {
+          const label = `${type[0].toUpperCase()}${type.slice(1)} ${ghost ? "ghost" : "normal"}`;
+          report(label);
           const r=await drumAPI.renderOneShot({activeType:type,ghost});
-          add(`${type}-${ghost?"ghost":"normal"}.wav`,r.buffer);
+          add(`${type}-${ghost?"ghost":"normal"}.wav`,r.buffer,label);
         }
         for(let bar=1;bar<=bars;bar++) {
+          const label = `${type[0].toUpperCase()}${type.slice(1)} bar ${bar}`;
+          report(label);
           const r=await drumAPI.renderConstructionBar({activeType:type,sourceBar:bar,tempo,swing:state.project.swing});
           // Empty bars are harmless but construction kits should not contain blank files.
           let peak=0; for(let c=0;c<r.buffer.numberOfChannels;c++){const a=r.buffer.getChannelData(c);for(let i=0;i<a.length;i++)peak=Math.max(peak,Math.abs(a[i]));}
-          if(peak>1e-5) add(`${type}-bar${bar}-${tempo}bpm.wav`,r.buffer);
+          if(peak>1e-5) add(`${type}-bar${bar}-${tempo}bpm.wav`,r.buffer,label);
         }
       }
     }
 
     if (needNoise && noiseAPI) {
+      report("Noise loop");
       const duration=bedExportLengthSeconds(state.child.noiseExportLength);
       const r=noiseAPI.renderBed({duration});
-      add(`noise-loop-${Math.round(r.loopSeconds)}s.wav`,r.buffer);
+      add(`noise-loop-${Math.round(r.loopSeconds)}s.wav`,r.buffer,"Noise loop");
     }
     if (needDrone && droneAPI) {
+      report("Drone loop");
       const duration=bedExportLengthSeconds(state.child.droneExportLength);
       const r=droneAPI.renderBed({duration});
-      add(`drone-loop-${Math.round(r.loopSeconds)}s.wav`,r.buffer);
+      add(`drone-loop-${Math.round(r.loopSeconds)}s.wav`,r.buffer,"Drone loop");
     }
 
     if (needMelody && arpAPI) {
       for(let phrase=1;phrase<=4;phrase++) for(let bar=1;bar<=bars;bar++) {
+        const label = `Melody ${phrase} bar ${bar}`;
+        report(label);
         const r=await arpAPI.render.renderSourceBar({phrase:`p${phrase}`,sourceBar:bar,preserveTail:true});
-        if((r?.eventCount||0)>0) add(`M${phrase}-bar${bar}-${tempo}bpm.wav`,r.buffer);
+        if((r?.eventCount||0)>0) add(`M${phrase}-bar${bar}-${tempo}bpm.wav`,r.buffer,label);
       }
     }
 
@@ -2743,16 +2834,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const root=Math.round(Number(state.project.root)||60);
       const gate=Math.max(0.25,Number(state.settings?.synthAuditionLength)||2);
       for (const dry of [true,false]) {
+        const label = `Synth root ${dry ? "dry" : "wet"}`;
+        report(label);
         const r=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,dry,effectsReleaseMs:state.child.synthEffectsRelease});
-        add(`synth-root-${midiNoteName(root)}-${dry?"dry":"wet"}.wav`,r.buffer);
+        add(`synth-root-${midiNoteName(root)}-${dry?"dry":"wet"}.wav`,r.buffer,label);
       }
+      report("Synth root no harmonies");
       const noH=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,noHarmonies:true,effectsReleaseMs:state.child.synthEffectsRelease});
-      add(`synth-root-${midiNoteName(root)}-no-harmonies-wet.wav`,noH.buffer);
+      add(`synth-root-${midiNoteName(root)}-no-harmonies-wet.wav`,noH.buffer,"Synth root no harmonies");
+      report("Synth isolated noise");
       const noise=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,noiseOnly:true,effectsReleaseMs:state.child.synthEffectsRelease});
-      add(`synth-noise-isolated.wav`,noise.buffer);
+      add(`synth-noise-isolated.wav`,noise.buffer,"Synth isolated noise");
       for(const note of constructionScaleNotes(root,state.project.scale)) for(const dry of [true,false]) {
+        const label = `Synth ${midiNoteName(note)} ${dry ? "dry" : "wet"}`;
+        report(label);
         const r=await synthAPI.renderConstructionNote({midiNote:note,gateSeconds:gate,tempo,dry,effectsReleaseMs:state.child.synthEffectsRelease});
-        add(`synth-${midiNoteName(note)}-${dry?"dry":"wet"}.wav`,r.buffer);
+        add(`synth-${midiNoteName(note)}-${dry?"dry":"wet"}.wav`,r.buffer,label);
       }
     }
 
@@ -2766,13 +2863,15 @@ document.addEventListener("DOMContentLoaded", () => {
         for(let col=1;col<=3;col++) {
           const type=trackMeta[col].type;
           if(!(selected.has("drums")||selected.has(type))) continue;
+          const label = `Sequencer ${type}`;
+          report(label);
           const pieces=[];
           for(let row=0;row<seq.bars;row++) {
             const parsed=parseSequencerCell(state.sequencer[row][col],col); if(!parsed) continue;
             const r=await drumAPI.renderConstructionBar({activeType:type,sourceBar:parsed.bar,tempo,swing:state.project.swing});
             pieces.push({row,buffer:r.buffer});
           }
-          if(pieces.length) add(`sequencer-${type}-${tempo}bpm.wav`,await assembleConstructionStem(pieces,secondsPerBar,seq.bars));
+          if(pieces.length) add(`sequencer-${type}-${tempo}bpm.wav`,await assembleConstructionStem(pieces,secondsPerBar,seq.bars),label);
         }
       }
       if(needMelody && arpAPI && synthAPI && seq.hasMelody) {
@@ -2788,23 +2887,26 @@ document.addEventListener("DOMContentLoaded", () => {
           });
         }
         if(melodyEvents.length){
+          report("Sequencer melody");
           const r=await synthAPI.renderArpPerformance({
             events:melodyEvents,
             loopSeconds:seq.bars*secondsPerBar,
             effectsReleaseMs:state.child.arpEffectsRelease,
             tempo,
           });
-          if(r?.buffer) add(`sequencer-melody-${tempo}bpm.wav`,r.buffer);
+          if(r?.buffer) add(`sequencer-melody-${tempo}bpm.wav`,r.buffer,"Sequencer melody");
         }
       }
       const seqSeconds=seq.bars*secondsPerBar;
       if(needNoise && noiseAPI) {
+        report("Sequencer noise");
         const r=noiseAPI.renderBed({duration:bedExportLengthSeconds(state.child.noiseExportLength)});
-        add(`sequencer-noise-${tempo}bpm.wav`,await repeatBedStem(r.buffer,seqSeconds,{leadInSeconds:state.child.noiseLeadIn,fadeInSeconds:state.child.noiseFadeIn}));
+        add(`sequencer-noise-${tempo}bpm.wav`,await repeatBedStem(r.buffer,seqSeconds,{leadInSeconds:state.child.noiseLeadIn,fadeInSeconds:state.child.noiseFadeIn}),"Sequencer noise");
       }
       if(needDrone && droneAPI) {
+        report("Sequencer drone");
         const r=droneAPI.renderBed({duration:bedExportLengthSeconds(state.child.droneExportLength)});
-        add(`sequencer-drone-${tempo}bpm.wav`,await repeatBedStem(r.buffer,seqSeconds,{leadInSeconds:state.child.droneLeadIn,fadeInSeconds:state.child.droneFadeIn}));
+        add(`sequencer-drone-${tempo}bpm.wav`,await repeatBedStem(r.buffer,seqSeconds,{leadInSeconds:state.child.droneLeadIn,fadeInSeconds:state.child.droneFadeIn}),"Sequencer drone");
       }
     }
 
@@ -3060,7 +3162,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return files;
   }
 
-  async function exportCurrentProject(container, { onAudioProgress = null } = {}) {
+  async function exportCurrentProject(container, { onAudioProgress = null, onStage = null } = {}) {
     const availablePatches = collectAvailablePatches();
     const selectedKeys = selectedPatchKeys(container);
     const selectedMid = selectedMidiKeys(container).length;
@@ -3087,6 +3189,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const folder = `${projectName}/`;
     const files = [];
+    onStage?.("Preparing export");
     if (selectedProjectJson) {
       files.push({
         name: `${folder}project.json`,
@@ -3106,10 +3209,12 @@ document.addEventListener("DOMContentLoaded", () => {
     files.push(...midiExportFiles(container, folder, projectName));
 
     if (selectedM8s) {
+      onStage?.("Building M8 export");
       files.push(...await m8ExportFiles(projectName));
     }
 
     if (selectedWav > 0) {
+      onStage?.("Starting audio renders");
       files.push(...await audioConstructionExportFiles(container, folder, projectName, onAudioProgress));
     }
 
@@ -3118,6 +3223,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    onStage?.("Packaging files");
     downloadBlob(createStoreZip(files), `${projectName}.zip`);
   }
 
@@ -3646,8 +3752,63 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!cell) continue;
       cell.id = `${pagePrefix}_snapshot${snapshot}`;
       cell.setAttribute("aria-label", `Snapshot ${snapshot}`);
-      // Snapshot save/recall behavior will be wired when its state contract is defined.
+      attachSnapshotActions(cell, pagePrefix, snapshot - 1);
     }
+    renderSnapshotGrid(pagePrefix);
+  }
+
+  const SNAPSHOT_PHACE_BY_PAGE = Object.freeze({ app1_b5_p1: "synthPhace", app1_b5_p2: "drumPhace", app1_b5_p3: "arpPhace", app1_b5_p4: "noisePhace", app1_b5_p5: "dronePhace" });
+  const SNAPSHOT_HOLD_MS = 900;
+  const SNAPSHOT_FILL_DELAY_MS = 200;
+  let snapshotSuppressClickUntil = 0;
+
+  function renderSnapshotGrid(pagePrefix) {
+    const phace = SNAPSHOT_PHACE_BY_PAGE[pagePrefix];
+    const saved = phace ? window.InterPhaceShell?.snapshots?.read?.()[phace] || [] : [];
+    for (let index = 0; index < 8; index += 1) {
+      const cell = document.getElementById(`${pagePrefix}_snapshot${index + 1}`);
+      if (!cell) continue;
+      const filled = Boolean(saved[index]);
+      cell.classList.toggle("is-saved", filled);
+      cell.style.setProperty("--snapshot-clear-fill", "0%");
+      cell.setAttribute("aria-label", filled ? `Snapshot ${index + 1} saved` : `Snapshot ${index + 1} empty`);
+    }
+  }
+  function renderSnapshotGrids() { Object.keys(SNAPSHOT_PHACE_BY_PAGE).forEach(renderSnapshotGrid); }
+
+  function restorePhaceSnapshot(phace, snapshotState) {
+    const write = (key, value) => value && typeof value === "object" ? localStorage.setItem(key, JSON.stringify(value)) : localStorage.removeItem(key);
+    if (phace === "synthPhace") {
+      write("interPhace.synthPhace.ui.v3", snapshotState.ui);
+      write("interPhace.synthPhace.patch.v1", snapshotState.patch);
+      return;
+    }
+    write({ drumPhace: "drumPhace.build5.state", arpPhace: "interPhace.arpPhace.template.v1", noisePhace: "interPhace.noisePhace.ui.v2", dronePhace: "interPhace.dronePhace.ui.v2" }[phace], snapshotState.state);
+  }
+
+  function attachSnapshotActions(cell, pagePrefix, index) {
+    let timer = null, frame = 0, startedAt = 0, holding = false, fired = false;
+    const setFill = percent => cell.style.setProperty("--snapshot-clear-fill", `${Math.max(0, Math.min(100, percent))}%`);
+    const cancel = () => { holding = false; if (timer !== null) clearTimeout(timer); timer = null; if (frame) cancelAnimationFrame(frame); frame = 0; if (!fired) setFill(0); };
+    const paint = now => { if (!holding || fired) return; setFill(Math.max(0, ((now - startedAt - SNAPSHOT_FILL_DELAY_MS) / (SNAPSHOT_HOLD_MS - SNAPSHOT_FILL_DELAY_MS)) * 100)); frame = requestAnimationFrame(paint); };
+    cell.addEventListener("pointerdown", event => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      const phace = SNAPSHOT_PHACE_BY_PAGE[pagePrefix];
+      if (!(window.InterPhaceShell?.snapshots?.read?.()[phace] || [])[index]) return;
+      fired = false; cancel(); holding = true; startedAt = performance.now(); frame = requestAnimationFrame(paint);
+      timer = window.setTimeout(() => {
+        timer = null; if (!holding) return; fired = true; setFill(100);
+        snapshotSuppressClickUntil = performance.now() + 350;
+        window.InterPhaceShell?.snapshots?.remove?.(phace, index); renderSnapshotGrids();
+      }, SNAPSHOT_HOLD_MS);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(type => cell.addEventListener(type, cancel));
+    cell.addEventListener("click", () => {
+      if (performance.now() < snapshotSuppressClickUntil) return;
+      const phace = SNAPSHOT_PHACE_BY_PAGE[pagePrefix];
+      const snapshotState = window.InterPhaceShell?.snapshots?.restore?.(phace, index);
+      if (snapshotState) restorePhaceSnapshot(phace, snapshotState);
+    });
   }
 
   function clearExportSelection() {
@@ -3664,6 +3825,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (event.key !== GRID_LABEL_MODE_KEY) return;
     interSequencerLabelMode = event.newValue === "hex" ? "hex" : "res";
     renderInterSequencerGrid();
+  });
+  window.addEventListener("storage", event => {
+    if (event.key === "interPhace.phaceSnapshots.v1") renderSnapshotGrids();
   });
 
   const interSequencerMedia = window.matchMedia("(min-width: 760px)");

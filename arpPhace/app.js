@@ -3,7 +3,8 @@ const shell = document.getElementById("shell");
 const auditionBtn = document.getElementById("shellAudition");
 const melodyBtn = document.getElementById("shellB1");
 const arpBtn = document.getElementById("shellB2");
-const ARP_B2_LONG_PRESS_MS = 700;
+const ARP_B2_LONG_PRESS_MS = 900;
+const ARP_B2_FILL_DELAY_MS = 200;
 let arpB2LongPressTimer = null;
 let arpB2LongPressStart = 0;
 let arpB2LongPressFrame = 0;
@@ -27,7 +28,7 @@ function cancelArpB2LongPress() {
 
 function updateArpB2LongPressFill(now) {
   if (!arpB2LongPressStart || arpB2LongPressTimer === null) return;
-  setArpB2LongPressFill(((now - arpB2LongPressStart) / ARP_B2_LONG_PRESS_MS) * 100);
+  setArpB2LongPressFill(Math.max(0, ((now - arpB2LongPressStart - ARP_B2_FILL_DELAY_MS) / (ARP_B2_LONG_PRESS_MS - ARP_B2_FILL_DELAY_MS)) * 100));
   arpB2LongPressFrame = requestAnimationFrame(updateArpB2LongPressFill);
 }
 
@@ -1212,7 +1213,7 @@ function chooseMelodyRest() {
   finishMelodyEntry("");
 }
 
-const MELODY_CLEAR_HOLD_MS = 700;
+const MELODY_CLEAR_HOLD_MS = 900;
 
 function clearWholeMelody(phraseId) {
   const phrase = melodyState[phraseId];
@@ -2607,7 +2608,8 @@ let melodyButtonClearTimer = null;
 let melodyButtonClearFrame = 0;
 let melodyButtonClearStart = 0;
 let melodyButtonClearFired = false;
-const MELODY_BUTTON_CLEAR_MS = 650;
+const MELODY_BUTTON_CLEAR_MS = 900;
+const MELODY_BUTTON_FILL_DELAY_MS = 200;
 
 function setMelodyButtonClearFill(percent) {
   const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
@@ -2626,7 +2628,7 @@ function cancelMelodyButtonClear() {
 
 function updateMelodyButtonClearFill(now) {
   if (melodyButtonClearTimer === null || melodyButtonClearFired) return;
-  setMelodyButtonClearFill(((now - melodyButtonClearStart) / MELODY_BUTTON_CLEAR_MS) * 100);
+  setMelodyButtonClearFill(Math.max(0, ((now - melodyButtonClearStart - MELODY_BUTTON_FILL_DELAY_MS) / (MELODY_BUTTON_CLEAR_MS - MELODY_BUTTON_FILL_DELAY_MS)) * 100));
   melodyButtonClearFrame = requestAnimationFrame(updateMelodyButtonClearFill);
 }
 
@@ -2692,7 +2694,8 @@ let chanceButtonClearTimer = null;
 let chanceButtonClearFrame = 0;
 let chanceButtonClearStart = 0;
 let chanceButtonClearFired = false;
-const CHANCE_BUTTON_CLEAR_MS = 650;
+const CHANCE_BUTTON_CLEAR_MS = 900;
+const CHANCE_BUTTON_FILL_DELAY_MS = 200;
 
 function setChanceButtonClearFill(percent) {
   const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
@@ -2711,7 +2714,7 @@ function cancelChanceButtonClear() {
 
 function updateChanceButtonClearFill(now) {
   if (chanceButtonClearTimer === null || chanceButtonClearFired) return;
-  setChanceButtonClearFill(((now - chanceButtonClearStart) / CHANCE_BUTTON_CLEAR_MS) * 100);
+  setChanceButtonClearFill(Math.max(0, ((now - chanceButtonClearStart - CHANCE_BUTTON_FILL_DELAY_MS) / (CHANCE_BUTTON_CLEAR_MS - CHANCE_BUTTON_FILL_DELAY_MS)) * 100));
   chanceButtonClearFrame = requestAnimationFrame(updateChanceButtonClearFill);
 }
 
@@ -3266,4 +3269,8 @@ const arpShellBinding = window.InterPhaceShell?.bind({
   text: getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#f0f1f3",
   muted: getComputedStyle(document.documentElement).getPropertyValue("--muted").trim() || "#777d87",
   getAuditionState: () => window.ArpPhaceAuditionEngine?.getAuditionState?.() || "idle",
+  canSnapshot: () => window.InterPhaceShell?.snapshots?.hasOpenSlot("arpPhace"),
+  onSnapshot: () => window.InterPhaceShell?.snapshots?.save("arpPhace", {
+    state: JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"),
+  }),
 });

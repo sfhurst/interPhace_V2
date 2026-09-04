@@ -11,9 +11,32 @@
   const buttons = [1, 2, 3, 4, 5].map((number) => document.getElementById(`shellB${number}`));
   const backgroundAutoGroups = [];
 
-  const b1Names = ["Carrier / Harmonics", "FM", "Behavior / Character", "Texture / Transient"];
+  const b1Names = ["Carrier / Harmonics", "FM", "Texture / Transient"];
+  const PRETTY_PRESETS = Object.freeze([
+    { name: "Still", balance: 50, strike: 12, bloom: 45, damp: 35, color: 14, resonance: 14, blend: 55 },
+    { name: "Keys", balance: 58, strike: 48, bloom: 18, damp: 52, color: 42, resonance: 8, blend: 70 },
+    { name: "Bloom", balance: 68, strike: 8, bloom: 82, damp: 18, color: 30, resonance: 18, blend: 68 },
+    { name: "Drift", balance: 46, strike: 4, bloom: 36, damp: 50, color: 20, resonance: 72, blend: 62 },
+  ]);
+
+  function selectedEngineMode() {
+    try {
+      return JSON.parse(localStorage.getItem("interPhace.interPhace.ui.v2") || "null")?.child?.synthEngine === "pretty" ? "pretty" : "fm";
+    } catch (_) { return "fm"; }
+  }
+
+  function setSelectedEngineMode(mode) {
+    const safe = mode === "pretty" ? "pretty" : "fm";
+    try {
+      const key = "interPhace.interPhace.ui.v2";
+      const saved = JSON.parse(localStorage.getItem(key) || "null") || {};
+      saved.child = { ...(saved.child || {}), synthEngine: safe };
+      localStorage.setItem(key, JSON.stringify(saved));
+    } catch (_) {}
+  }
   const b2Names = ["Effects Presets", "Effects Amount"];
   const b3Names = ["High Cut / Low Cut", "EQ 1", "EQ 2", "EQ 3"];
+  const b4Names = ["Envelope", "Behavior / Character", "Drawn Envelope"];
 
   const scaleById = Object.fromEntries(DATA.scales.map((scale) => [scale.id, scale]));
   const eqPageMap = {
@@ -27,15 +50,20 @@
     b1Page: 1,
     b2Page: 1,
     b3Page: 1,
+    b4Page: 1,
     values: {},
     eqRanges: { eq1: "low", eq2: "mid", eq3: "high" },
   };
 
   let hadCurrentSavedState = false;
+  let requiresBuild501NavigationMigration = false;
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (saved && typeof saved === "object") {
       hadCurrentSavedState = true;
+      // B4 acquired page state in Build 501. Its absence identifies the old
+      // four-page B1 layout without re-migrating current B1 P3 Texture.
+      requiresBuild501NavigationMigration = !Object.hasOwn(saved, "b4Page");
       state = {
         ...state,
         ...saved,
@@ -51,15 +79,43 @@
         state.b1Page = Number(old.b1Page) || 1;
         state.b2Page = Number(old.b2Page) || 1;
         state.b3Page = Number(old.b3Page) || 1;
+        state.b4Page = Number(old.b4Page) || 1;
+        requiresBuild501NavigationMigration = true;
         break;
       }
     }
   } catch (_) {}
 
+  // Build 510 retunes the initial Pretty voice. Carry the old factory values
+  // forward only when they are still an untouched factory set; user edits stay
+  // exactly as they were.
+  const oldPrettyFactory = { prettyBalance: 50, prettyStrike: 20, prettyBloom: 45, prettyDamp: 35, prettyColor: 42, prettyResonance: 28, prettyBlend: 70 };
+  const newPrettyFactory = { prettyBalance: 50, prettyStrike: 12, prettyBloom: 45, prettyDamp: 35, prettyColor: 14, prettyResonance: 14, prettyBlend: 55 };
+  if (state.prettyTuningVersion !== 2 && Object.entries(oldPrettyFactory).every(([name, value]) => Number(state.values[name]) === value)) {
+    Object.assign(state.values, newPrettyFactory);
+  }
+  state.prettyTuningVersion = 2;
+
   if (!Number.isInteger(state.button) || state.button < 1 || state.button > 4) state.button = 1;
-  state.b1Page = Math.max(1, Math.min(4, Number(state.b1Page) || 1));
+
+  // Build 501 moves the old B1 pages without changing any control IDs or sound state.
+  // Preserve the closest matching destination for saved navigation from prior builds.
+  if (requiresBuild501NavigationMigration) {
+    const savedB1Page = Number(state.b1Page) || 1;
+    if (savedB1Page === 4) state.b1Page = 3;
+    if (savedB1Page === 3) {
+      state.b1Page = 1;
+      if (state.button === 1) {
+        state.button = 4;
+        state.b4Page = 2;
+      }
+    }
+  }
+
+  state.b1Page = Math.max(1, Math.min(b1Names.length, Number(state.b1Page) || 1));
   state.b2Page = Math.max(1, Math.min(2, Number(state.b2Page) || 1));
   state.b3Page = Math.max(1, Math.min(4, Number(state.b3Page) || 1));
+  state.b4Page = Math.max(1, Math.min(b4Names.length, Number(state.b4Page) || 1));
 
   // Audition loop cycles re-read the live synth UI state before each offline render.
   window.SynthPhaceUIState = state;
@@ -75,6 +131,11 @@
       window.SynthPhaceAuditionEngine?.getAuditionState?.() ||
       (window.SynthPhaceAuditionEngine?.isPlaying?.() ? "playing" : "idle"),
     auditionDisabled: false,
+    canSnapshot: () => window.InterPhaceShell?.snapshots?.hasOpenSlot("synthPhace"),
+    onSnapshot: () => window.InterPhaceShell?.snapshots?.save("synthPhace", {
+      ui: JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"),
+      patch: JSON.parse(localStorage.getItem("interPhace.synthPhace.patch.v1") || "null"),
+    }),
   });
 
   shellBinding.auditionBtn?.addEventListener("click", async () => {
@@ -105,10 +166,12 @@
   }
 
   function activePageId() {
+    if (state.button === 1 && state.b1Page === 1 && selectedEngineMode() === "pretty") return "app2_b1_p1_pretty";
+    if (state.button === 1 && state.b1Page === 2) return selectedEngineMode() === "pretty" ? "app2_b1_p2_pretty" : "app2_b1_p2";
     if (state.button === 1) return `app2_b1_p${state.b1Page}`;
     if (state.button === 2) return `app2_b2_p${state.b2Page}`;
     if (state.button === 3) return `app2_b3_p${state.b3Page}`;
-    return "app2_b4_p1";
+    return selectedEngineMode() === "pretty" ? "app2_b4_p1_pretty" : `app2_b4_p${state.b4Page}`;
   }
 
   function syncButtonPage(buttonNumber, pageNumber, names) {
@@ -132,9 +195,11 @@
     });
     shell.dataset.page = activeId;
     shell.dataset.context = "synth";
-    syncButtonPage(1, state.b1Page, b1Names);
+    const currentB1Names = selectedEngineMode() === "pretty" ? ["Pretty Voice", "Pretty Tone", "Texture / Transient"] : b1Names;
+    syncButtonPage(1, state.b1Page, currentB1Names);
     syncButtonPage(2, state.b2Page, b2Names);
     syncButtonPage(3, state.b3Page, b3Names);
+    syncButtonPage(4, selectedEngineMode() === "pretty" ? 1 : state.b4Page, selectedEngineMode() === "pretty" ? ["Pretty Contour"] : b4Names);
     backgroundAutoGroups.forEach((group) => group?.schedule?.());
     save();
   }
@@ -185,7 +250,7 @@
         return;
       }
       if (buttonNumber === 1) {
-        if (state.button === 1) state.b1Page = (state.b1Page % 4) + 1;
+        if (state.button === 1) state.b1Page = (state.b1Page % b1Names.length) + 1;
         state.button = 1;
       } else if (buttonNumber === 2) {
         if (state.button === 2) state.b2Page = (state.b2Page % b2Names.length) + 1;
@@ -194,6 +259,7 @@
         if (state.button === 3) state.b3Page = (state.b3Page % b3Names.length) + 1;
         state.button = 3;
       } else if (buttonNumber === 4) {
+        if (selectedEngineMode() !== "pretty" && state.button === 4) state.b4Page = (state.b4Page % b4Names.length) + 1;
         state.button = 4;
       }
       render();
@@ -309,6 +375,7 @@
       case "decay1":
       case "hold2":
       case "decay2": return (v) => formatSeconds(v * currentMultiplier());
+      case "drawnEnvelopeLength": return (v) => `${trimNumber(v, 2)}s`;
       case "decayPercent": return (v) => `${Math.round(v)}%`;
       case "timeMultiplier": return (v) => `${trimNumber(v, 2)}×`;
       case "envelopePreset": return (v) => {
@@ -330,6 +397,12 @@
       case "reverbPreset": return (v) => DATA.effects.reverb[v] ?? String(v);
       case "convolutionPreset": return (v) => (['Off','Piano Body','Rhodes Body','Wood Box','Large Wood Box','Metal Box','Glass','Small Speaker','Radio','Telephone','Bass Cabinet','Vintage Cabinet','Drum Shell','Mallet Body','Small Room','Dark Room','Bright Room','Concrete','Stairwell','Tunnel','Short Plate','Long Plate','Spring','Air Chamber','Dark Chamber','Stone Chamber','Cathedral','Ghost Chamber','Abyss'])[Math.round(v)] ?? String(Math.round(v));
       case "convolutionWet": return (v) => `${Math.round(v)}%`;
+      case "prettyVoice": return (v) => ["Round", "Hollow", "Bell", "Mallet", "Key"][Math.round(v)] || "Round";
+      case "prettyBalance": case "prettyStrike": case "prettyBloom": case "prettyDamp":
+      case "prettyColor": case "prettyResonance": case "prettyBlend": case "prettyBody":
+      case "prettyHarmonics": case "prettySpread": case "prettyLevel": case "prettyAttack":
+      case "prettyBodyDecay": case "prettyOvertoneDecay": case "prettyEnvelopeDamp": case "prettyRelease": return (v) => `${Math.round(v)}%`;
+      case "prettyPreset": return (v) => PRETTY_PRESETS[Math.round(v)]?.name || "Still";
       default: return (v) => String(v);
     }
   }
@@ -542,6 +615,9 @@
   }
 
   function patchPresetMatch() {
+    if (selectedEngineMode() === "pretty") {
+      return Math.max(0, Math.min(PRETTY_PRESETS.length - 1, Number(document.getElementById("app2_b1_p2_pretty_preset")?.value) || 0));
+    }
     const current = window.SynthPhacePatchAdapter?.captureSynthPatch?.(state);
     if (!current) return -1;
     const currentKey = JSON.stringify(patchMatchShape(current));
@@ -553,6 +629,12 @@
   function syncPatchPreset() {
     const slider = document.getElementById("app2_b1_p1_patchPreset");
     if (!slider) return;
+    if (selectedEngineMode() === "pretty") {
+      const index = patchPresetMatch();
+      slider.max = String(PRETTY_PRESETS.length - 1);
+      setPresetIndicator(slider, index, PRETTY_PRESETS[index]?.name || "Still", false);
+      return;
+    }
     const library = window.InterPhaceData?.PRESET_LIBRARY || [];
     const match = patchPresetMatch();
     if (match >= 0) loadedPatchPresetIndex = match;
@@ -588,6 +670,11 @@
   }
 
   function applyPatchPreset(index) {
+    if (selectedEngineMode() === "pretty") {
+      applyPrettyPreset(index);
+      syncPatchPreset();
+      return;
+    }
     const entry = window.InterPhaceData?.PRESET_LIBRARY?.[Number(index)];
     const patch = entry?.data?.patch;
     if (!patch) return;
@@ -613,6 +700,14 @@
     dispatchSlider("app2_b1_p2_mod2Ratio", ratioIndexForExact(fm.modulators?.[1]?.ratio ?? 2));
     dispatchSlider("app2_b1_p2_mod2Wave", waveIndexForExact(fm.modulators?.[1]?.wave));
     dispatchSlider("app2_b1_p2_mod1Shape", fm.fmDepthPreset ?? 0);
+    const pretty = patch.synth?.pretty || {};
+    dispatchSlider("app2_b1_p2_pretty_balance", pretty.balance ?? 50);
+    dispatchSlider("app2_b1_p2_pretty_strike", pretty.strike ?? 12);
+    dispatchSlider("app2_b1_p2_pretty_bloom", pretty.bloom ?? 45);
+    dispatchSlider("app2_b1_p2_pretty_damp", pretty.damp ?? 35);
+    dispatchSlider("app2_b1_p2_pretty_color", pretty.color ?? 14);
+    dispatchSlider("app2_b1_p2_pretty_resonance", pretty.resonance ?? 14);
+    dispatchSlider("app2_b1_p2_pretty_blend", pretty.blend ?? 55);
 
     const env = patch.envelope?.ahdhd || {};
     dispatchSlider("app2_b1_p3_instrumentBehavior", env.instrumentBehavior ?? 0);
@@ -679,6 +774,7 @@
       console.warn("Imported synth harmony translation fell back to nearest legal notes:", error);
     }
 
+    setSelectedEngineMode(patch.synth?.engine?.mode);
     const fm = patch.synth?.fm || {};
     dispatchSlider("app2_b1_p1_carrierVolume", fm.carrierVolume ?? 100);
     dispatchSlider("app2_b1_p1_harmonics", fm.harmonics ?? 0);
@@ -694,6 +790,14 @@
     dispatchSlider("app2_b1_p2_mod2Ratio", ratioIndexForExact(fm.modulators?.[1]?.ratio ?? 2));
     dispatchSlider("app2_b1_p2_mod2Wave", waveIndexForExact(fm.modulators?.[1]?.wave));
     dispatchSlider("app2_b1_p2_mod1Shape", fm.fmDepthPreset ?? 0);
+    const pretty = patch.synth?.pretty || {};
+    dispatchSlider("app2_b1_p2_pretty_balance", pretty.balance ?? 50);
+    dispatchSlider("app2_b1_p2_pretty_strike", pretty.strike ?? 20);
+    dispatchSlider("app2_b1_p2_pretty_bloom", pretty.bloom ?? 45);
+    dispatchSlider("app2_b1_p2_pretty_damp", pretty.damp ?? 35);
+    dispatchSlider("app2_b1_p2_pretty_color", pretty.color ?? 42);
+    dispatchSlider("app2_b1_p2_pretty_resonance", pretty.resonance ?? 28);
+    dispatchSlider("app2_b1_p2_pretty_blend", pretty.blend ?? 70);
 
     const env = patch.envelope?.ahdhd || {};
     dispatchSlider("app2_b1_p3_instrumentBehavior", env.instrumentBehavior ?? 0);
@@ -950,6 +1054,110 @@
 
   document.querySelectorAll('.macroControl input[type="range"]').forEach(bindRange);
 
+  // B4 P3 is intentionally a freeform control, but its state lives in the
+  // same saved synth UI object as every other control. A new stroke clears the
+  // prior curve immediately; only a complete left-to-right Start→End stroke is
+  // valid for audio.
+  const drawnArea = document.getElementById("app2_b4_p3_drawArea");
+  const drawnCanvas = document.getElementById("app2_b4_p3_canvas");
+  const drawnLength = document.getElementById("app2_b4_p3_length");
+  state.drawnEnvelope = state.drawnEnvelope && typeof state.drawnEnvelope === "object"
+    ? state.drawnEnvelope : { valid: false, curve: [] };
+  let drawing = null;
+
+  function drawnMetrics() {
+    const rect = drawnArea?.getBoundingClientRect();
+    const pad = 18;
+    return rect ? { rect, pad, width: Math.max(1, rect.width - pad * 2), height: Math.max(1, rect.height - pad * 2) } : null;
+  }
+
+  function redrawDrawnEnvelope() {
+    if (!drawnCanvas || !drawnArea) return;
+    const metrics = drawnMetrics(); if (!metrics) return;
+    const ratio = Math.max(1, window.devicePixelRatio || 1);
+    drawnCanvas.width = Math.round(metrics.rect.width * ratio);
+    drawnCanvas.height = Math.round(metrics.rect.height * ratio);
+    drawnCanvas.style.width = `${metrics.rect.width}px`; drawnCanvas.style.height = `${metrics.rect.height}px`;
+    const ctx = drawnCanvas.getContext("2d"); ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, metrics.rect.width, metrics.rect.height);
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--line-strong").trim() || "#555a63";
+    ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(metrics.pad, metrics.rect.height - metrics.pad); ctx.lineTo(metrics.rect.width - metrics.pad, metrics.rect.height - metrics.pad); ctx.stroke(); ctx.setLineDash([]);
+    const points = drawing?.points || (state.drawnEnvelope.valid ? state.drawnEnvelope.curve.map((value, index, all) => [index / Math.max(1, all.length - 1), value]) : []);
+    if (points.length > 1) {
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--synth").trim() || "#00aaff";
+      ctx.lineWidth = 2.25; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.beginPath();
+      points.forEach(([x, y], index) => {
+        const px = metrics.pad + Math.max(0, Math.min(1, x)) * metrics.width;
+        const py = metrics.rect.height - metrics.pad - Math.max(0, Math.min(1, y)) * metrics.height;
+        if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }); ctx.stroke();
+    }
+  }
+
+  function canvasPoint(event) {
+    const metrics = drawnMetrics(); if (!metrics) return null;
+    const x = (event.clientX - metrics.rect.left - metrics.pad) / metrics.width;
+    const y = 1 - ((event.clientY - metrics.rect.top - metrics.pad) / metrics.height);
+    return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)), metrics };
+  }
+
+  function smoothDrawnCurve(points, count = 128) {
+    const sampled = [];
+    for (let index = 0; index < count; index += 1) {
+      const x = index / (count - 1); let right = points.findIndex(point => point[0] >= x);
+      if (right < 0) right = points.length - 1; const left = Math.max(0, right - 1);
+      const a = points[left], b = points[right]; const span = Math.max(.00001, b[0] - a[0]);
+      sampled.push(a[1] + (b[1] - a[1]) * Math.max(0, Math.min(1, (x - a[0]) / span)));
+    }
+    const smooth = sampled.map((_, index) => {
+      let sum = 0, used = 0;
+      for (let offset = -2; offset <= 2; offset += 1) { const value = sampled[index + offset]; if (value !== undefined) { sum += value; used += 1; } }
+      return Math.max(0, Math.min(1, sum / used));
+    });
+    smooth[0] = 0; smooth[smooth.length - 1] = 0;
+    const peak = Math.max(...smooth);
+    // Normalize after correction/smoothing, not before: the drawn shape stays
+    // intact while every successful contour reaches a consistent full peak.
+    if (peak > .0001) {
+      for (let index = 1; index < smooth.length - 1; index += 1) smooth[index] = Math.min(1, smooth[index] / peak);
+    }
+    return smooth;
+  }
+
+  if (drawnArea && drawnCanvas) {
+    drawnArea.addEventListener("pointerdown", event => {
+      const point = canvasPoint(event); if (!point) return;
+      const distance = Math.hypot(event.clientX - (point.metrics.rect.left + point.metrics.pad), event.clientY - (point.metrics.rect.top + point.metrics.rect.height - point.metrics.pad));
+      if (distance > 28) return;
+      event.preventDefault(); drawnArea.setPointerCapture?.(event.pointerId);
+      state.drawnEnvelope = { valid: false, curve: [] };
+      drawing = { pointerId: event.pointerId, points: [[0, 0]] };
+      save(); redrawDrawnEnvelope();
+    });
+    drawnArea.addEventListener("pointermove", event => {
+      if (!drawing || event.pointerId !== drawing.pointerId) return;
+      const point = canvasPoint(event); if (!point) return; event.preventDefault();
+      const previous = drawing.points[drawing.points.length - 1];
+      // Time never moves backward in the stored envelope. Backward finger
+      // motion is simply corrected at the current time position, not rejected.
+      drawing.points.push([Math.max(previous[0], point.x), point.y]); redrawDrawnEnvelope();
+    });
+    const finishDraw = event => {
+      if (!drawing || event.pointerId !== drawing.pointerId) return;
+      const point = canvasPoint(event); const metrics = point?.metrics;
+      const endDistance = metrics ? Math.hypot(event.clientX - (metrics.rect.left + metrics.rect.width - metrics.pad), event.clientY - (metrics.rect.top + metrics.rect.height - metrics.pad)) : Infinity;
+      if (endDistance <= 28) {
+        drawing.points.push([1, 0]);
+        state.drawnEnvelope = { valid: true, curve: smoothDrawnCurve(drawing.points) };
+      } else state.drawnEnvelope = { valid: false, curve: [] };
+      drawing = null; save(); redrawDrawnEnvelope();
+    };
+    drawnArea.addEventListener("pointerup", finishDraw);
+    drawnArea.addEventListener("pointercancel", finishDraw);
+    window.addEventListener("resize", redrawDrawnEnvelope);
+    requestAnimationFrame(redrawDrawnEnvelope);
+  }
+
 
   const patchPresetSlider = document.getElementById("app2_b1_p1_patchPreset");
   if (patchPresetSlider) {
@@ -1141,6 +1349,24 @@
     applyRatioPreset(event.target.value);
   });
   syncRatioPreset();
+
+  const prettyPresetSlider = document.getElementById("app2_b1_p2_pretty_preset");
+  function applyPrettyPreset(index) {
+    const safe = Math.max(0, Math.min(PRETTY_PRESETS.length - 1, Number(index) || 0));
+    const preset = PRETTY_PRESETS[safe];
+    if (!preset) return;
+    Object.entries(preset).forEach(([key, value]) => {
+      if (key === "name") return;
+      dispatchSlider(`app2_b1_p2_pretty_${key}`, value);
+    });
+    setPresetIndicator(prettyPresetSlider, safe, preset.name, false);
+    save();
+  }
+  if (prettyPresetSlider) {
+    prettyPresetSlider.max = String(PRETTY_PRESETS.length - 1);
+    prettyPresetSlider.addEventListener("input", event => applyPrettyPreset(event.target.value));
+    refreshInputDisplay(prettyPresetSlider);
+  }
 
   const envelopeDependentIds = Object.values(envelopeKeys);
   envelopeDependentIds.forEach((id) => {

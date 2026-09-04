@@ -3,7 +3,9 @@
 
   const PROJECT_STORAGE_KEY = "interPhace.interPhace.ui.v2";
   const SYNTH_PATCH_STORAGE_KEY = "interPhace.synthPhace.patch.v1";
-  const PATCH_VERSION = 2;
+  const PATCH_VERSION = 5;
+  const PRETTY_DEFAULT = Object.freeze({ voice: 0, body: 60, harmonics: 28, spread: 0, level: 78, strike: 12, bloom: 45, damp: 35, color: 14, resonance: 14, blend: 55, preset: 0 });
+  const PRETTY_ENVELOPE_DEFAULT = Object.freeze({ attack: 15, bodyDecay: 42, overtoneDecay: 25, damp: 45, release: 18 });
 
   const DATA = window.SynthPhaceControlData;
   if (!DATA) throw new Error("synthPhace control data missing before patch adapter");
@@ -129,6 +131,10 @@
     }
   }
 
+  function selectedEngineMode() {
+    return readProjectState()?.child?.synthEngine === "pretty" ? "pretty" : "fm";
+  }
+
   function readProjectContext() {
     const project = readProjectState().project || {};
 
@@ -190,6 +196,28 @@
       },
 
       synth: {
+        engine: { mode: selectedEngineMode() },
+        pretty: {
+          voice: inputValue("app2_b1_p1_pretty_voice", values.prettyVoice ?? PRETTY_DEFAULT.voice),
+          body: inputValue("app2_b1_p1_pretty_body", values.prettyBody ?? PRETTY_DEFAULT.body),
+          harmonics: inputValue("app2_b1_p1_pretty_harmonics", values.prettyHarmonics ?? PRETTY_DEFAULT.harmonics),
+          spread: inputValue("app2_b1_p1_pretty_spread", values.prettySpread ?? PRETTY_DEFAULT.spread),
+          level: inputValue("app2_b1_p1_pretty_level", values.prettyLevel ?? PRETTY_DEFAULT.level),
+          strike: inputValue("app2_b1_p2_pretty_strike", values.prettyStrike ?? PRETTY_DEFAULT.strike),
+          bloom: inputValue("app2_b1_p2_pretty_bloom", values.prettyBloom ?? PRETTY_DEFAULT.bloom),
+          damp: inputValue("app2_b1_p2_pretty_damp", values.prettyDamp ?? PRETTY_DEFAULT.damp),
+          color: inputValue("app2_b1_p2_pretty_color", values.prettyColor ?? PRETTY_DEFAULT.color),
+          resonance: inputValue("app2_b1_p2_pretty_resonance", values.prettyResonance ?? PRETTY_DEFAULT.resonance),
+          blend: inputValue("app2_b1_p2_pretty_blend", values.prettyBlend ?? PRETTY_DEFAULT.blend),
+          preset: Math.round(inputValue("app2_b1_p2_pretty_preset", values.prettyPreset ?? 0)),
+        },
+        prettyEnvelope: {
+          attack: inputValue("app2_b4_p1_pretty_attack", values.prettyAttack ?? PRETTY_ENVELOPE_DEFAULT.attack),
+          bodyDecay: inputValue("app2_b4_p1_pretty_bodyDecay", values.prettyBodyDecay ?? PRETTY_ENVELOPE_DEFAULT.bodyDecay),
+          overtoneDecay: inputValue("app2_b4_p1_pretty_overtoneDecay", values.prettyOvertoneDecay ?? PRETTY_ENVELOPE_DEFAULT.overtoneDecay),
+          damp: inputValue("app2_b4_p1_pretty_damp", values.prettyEnvelopeDamp ?? PRETTY_ENVELOPE_DEFAULT.damp),
+          release: inputValue("app2_b4_p1_pretty_release", values.prettyRelease ?? PRETTY_ENVELOPE_DEFAULT.release),
+        },
         fm: {
           carrierVolume: inputValue("app2_b1_p1_carrierVolume", values.carrierVolume ?? 100),
           harmonics: inputValue("app2_b1_p1_harmonics", values.harmonics ?? 0),
@@ -220,6 +248,12 @@
       },
 
       envelope: {
+        drawn: {
+          active: selectedEngineMode() === "fm" && Number(uiState.b4Page) === 3,
+          valid: !!uiState.drawnEnvelope?.valid,
+          duration: inputValue("app2_b4_p3_length", values.drawnEnvelopeLength ?? 2),
+          curve: Array.isArray(uiState.drawnEnvelope?.curve) ? uiState.drawnEnvelope.curve.slice(0, 256) : [],
+        },
         ahdhd: {
           attack1: inputValue("app2_b4_p1_attack", values.attack ?? 0.04),
           hold1: inputValue("app2_b4_p1_hold1", values.hold1 ?? 0),
@@ -274,8 +308,16 @@
   function readSynthPatch() {
     try {
       const saved = JSON.parse(localStorage.getItem(SYNTH_PATCH_STORAGE_KEY) || "null");
-      if (saved && typeof saved === "object" && Number(saved.version) === PATCH_VERSION) {
-        return clone(saved);
+      if (saved && typeof saved === "object" && [2, 3, 4, PATCH_VERSION].includes(Number(saved.version))) {
+        const migrated = clone(saved);
+        migrated.version = PATCH_VERSION;
+        migrated.synth ||= {};
+        migrated.synth.engine ||= { mode: "fm" };
+        migrated.synth.pretty = { ...PRETTY_DEFAULT, ...(migrated.synth.pretty || {}) };
+        migrated.synth.prettyEnvelope = { ...PRETTY_ENVELOPE_DEFAULT, ...(migrated.synth.prettyEnvelope || {}) };
+        migrated.envelope ||= {};
+        migrated.envelope.drawn ||= { active: false, valid: false, duration: 2, curve: [] };
+        return migrated;
       }
     } catch (_) {}
     return null;
@@ -326,6 +368,7 @@
     PROJECT_STORAGE_KEY,
     SYNTH_PATCH_STORAGE_KEY,
     PATCH_VERSION,
+    PRETTY_DEFAULT,
     FIVE_TO_SEVEN_DEGREE_MAP,
     readProjectContext,
     harmonyPositionForScale,

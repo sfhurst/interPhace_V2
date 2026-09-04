@@ -2695,7 +2695,8 @@ let patternLongPressTimer = null;
 let patternLongPressFrame = 0;
 let patternLongPressStart = 0;
 let patternLongPressFired = false;
-const PATTERN_LONG_PRESS_MS = 650;
+const PATTERN_LONG_PRESS_MS = 900;
+const PATTERN_FILL_DELAY_MS = 200;
 
 function setPatternLongPressFill(percent) {
   const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
@@ -2714,7 +2715,7 @@ function cancelPatternLongPress() {
 
 function updatePatternLongPressFill(now) {
   if (patternLongPressTimer === null || patternLongPressFired) return;
-  setPatternLongPressFill(((now - patternLongPressStart) / PATTERN_LONG_PRESS_MS) * 100);
+  setPatternLongPressFill(Math.max(0, ((now - patternLongPressStart - PATTERN_FILL_DELAY_MS) / (PATTERN_LONG_PRESS_MS - PATTERN_FILL_DELAY_MS)) * 100));
   patternLongPressFrame = requestAnimationFrame(updatePatternLongPressFill);
 }
 
@@ -2769,7 +2770,8 @@ let chanceLongPressTimer = null;
 let chanceLongPressFrame = 0;
 let chanceLongPressStart = 0;
 let chanceLongPressFired = false;
-const CHANCE_LONG_PRESS_MS = 650;
+const CHANCE_LONG_PRESS_MS = 900;
+const CHANCE_FILL_DELAY_MS = 200;
 
 function setChanceLongPressFill(percent) {
   const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
@@ -2788,7 +2790,7 @@ function cancelChanceLongPress() {
 
 function updateChanceLongPressFill(now) {
   if (chanceLongPressTimer === null || chanceLongPressFired) return;
-  setChanceLongPressFill(((now - chanceLongPressStart) / CHANCE_LONG_PRESS_MS) * 100);
+  setChanceLongPressFill(Math.max(0, ((now - chanceLongPressStart - CHANCE_FILL_DELAY_MS) / (CHANCE_LONG_PRESS_MS - CHANCE_FILL_DELAY_MS)) * 100));
   chanceLongPressFrame = requestAnimationFrame(updateChanceLongPressFill);
 }
 
@@ -3953,4 +3955,8 @@ const drumShellBinding = window.InterPhaceShell?.bind({
   text: getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#f0f1f3",
   muted: getComputedStyle(document.documentElement).getPropertyValue("--muted").trim() || "#777d87",
   getAuditionState: () => auditionState,
+  canSnapshot: () => window.InterPhaceShell?.snapshots?.hasOpenSlot("drumPhace"),
+  onSnapshot: () => window.InterPhaceShell?.snapshots?.save("drumPhace", {
+    state: JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"),
+  }),
 });

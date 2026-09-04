@@ -36,6 +36,77 @@ window.InterPhaceShell = (() => {
     { key: "dronePhace", label: "dP", color: "#66e0b3", rootHref: "dronePhace/index.html", childHref: "../dronePhace/index.html" },
   ];
 
+  const INTERPHACE_SETTINGS_PAGE = Object.freeze({
+    synthPhace: 1,
+    drumPhace: 2,
+    arpPhace: 3,
+    noisePhace: 4,
+    dronePhace: 5,
+  });
+  const SNAPSHOT_STORAGE_KEY = "interPhace.phaceSnapshots.v1";
+  const SNAPSHOT_PHACES = Object.freeze(["synthPhace", "drumPhace", "arpPhace", "noisePhace", "dronePhace"]);
+  const SNAPSHOT_SLOT_COUNT = 8;
+
+  function cloneSnapshotValue(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function readSnapshots() {
+    const empty = Object.fromEntries(SNAPSHOT_PHACES.map((phace) => [phace, []]));
+    try {
+      const saved = JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || "null");
+      if (!saved || typeof saved !== "object") return empty;
+      for (const phace of SNAPSHOT_PHACES) {
+        if (!Array.isArray(saved[phace])) continue;
+        empty[phace] = saved[phace]
+          .filter((snapshot) => snapshot && typeof snapshot === "object" && snapshot.state && typeof snapshot.state === "object")
+          .slice(0, SNAPSHOT_SLOT_COUNT);
+      }
+    } catch (_) {}
+    return empty;
+  }
+
+  function writeSnapshots(snapshots) {
+    try { localStorage.setItem(SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshots)); }
+    catch (_) {}
+  }
+
+  const snapshots = Object.freeze({
+    read: readSnapshots,
+    hasOpenSlot(phace) {
+      return SNAPSHOT_PHACES.includes(phace) && readSnapshots()[phace].length < SNAPSHOT_SLOT_COUNT;
+    },
+    save(phace, state) {
+      if (!SNAPSHOT_PHACES.includes(phace) || !state || typeof state !== "object") return false;
+      const all = readSnapshots();
+      if (all[phace].length >= SNAPSHOT_SLOT_COUNT) return false;
+      all[phace].push({ state: cloneSnapshotValue(state) });
+      writeSnapshots(all);
+      return true;
+    },
+    restore(phace, index) {
+      const snapshot = readSnapshots()[phace]?.[index];
+      return snapshot ? cloneSnapshotValue(snapshot.state) : null;
+    },
+    remove(phace, index) {
+      if (!SNAPSHOT_PHACES.includes(phace)) return false;
+      const all = readSnapshots();
+      if (!all[phace]?.[index]) return false;
+      all[phace].splice(index, 1);
+      writeSnapshots(all);
+      return true;
+    },
+  });
+
+  function hrefForPhace(currentPhace, targetPhace) {
+    const isRoot = currentPhace === "interPhace";
+    const href = isRoot ? targetPhace.rootHref : targetPhace.childHref;
+    const settingsPage = INTERPHACE_SETTINGS_PAGE[currentPhace];
+    return !isRoot && targetPhace.key === "interPhace" && settingsPage
+      ? `${href}?settings=${settingsPage}`
+      : href;
+  }
+
   function snapshotButton(button) {
     return {
       className: button.className,
@@ -62,7 +133,7 @@ window.InterPhaceShell = (() => {
     else button.setAttribute("aria-pressed", state.ariaPressed);
   }
 
-  function installPhaceSelector(appRoot, currentPhace) {
+  function installPhaceSelector(appRoot, currentPhace, { canSnapshot, onSnapshot } = {}) {
     const row = appRoot.querySelector(".shell-bottom-main");
     const buttons = Array.from({ length: 6 }, (_, i) =>
       appRoot.querySelector(`#shellB${i + 1}`)
@@ -71,8 +142,61 @@ window.InterPhaceShell = (() => {
     if (!row || buttons.some((button) => !button)) return null;
 
     let normalState = buttons.map(snapshotButton);
-    const isRoot = currentPhace === "interPhace";
     let selectorOpen = false;
+    let suppressNextB6Click = false;
+    let suppressB6ClickTimer = null;
+    let b6HoldTimer = null;
+    let b6HoldFrame = 0;
+    let b6HoldStart = 0;
+    let b6Holding = false;
+    let b6HoldFired = false;
+    const B6_HOLD_MS = 900;
+    const B6_FILL_DELAY_MS = 200;
+    const b6 = buttons[5];
+
+    const setB6HoldFill = (percent) => {
+      b6.style.setProperty("--snapshot-hold-fill", `${Math.max(0, Math.min(100, Number(percent) || 0))}%`);
+    };
+    const cancelB6Hold = () => {
+      b6Holding = false;
+      if (b6HoldTimer !== null) clearTimeout(b6HoldTimer);
+      b6HoldTimer = null;
+      if (b6HoldFrame) cancelAnimationFrame(b6HoldFrame);
+      b6HoldFrame = 0;
+      setB6HoldFill(0);
+    };
+    const paintB6Hold = (now) => {
+      if (!b6Holding || b6HoldFired) return;
+      setB6HoldFill(Math.max(0, ((now - b6HoldStart - B6_FILL_DELAY_MS) / (B6_HOLD_MS - B6_FILL_DELAY_MS)) * 100));
+      b6HoldFrame = requestAnimationFrame(paintB6Hold);
+    };
+
+    b6.addEventListener("pointerdown", (event) => {
+      if (selectorOpen || (event.pointerType === "mouse" && event.button !== 0)) return;
+      b6HoldFired = false;
+      cancelB6Hold();
+      b6Holding = true;
+      b6HoldStart = performance.now();
+      const canSave = typeof canSnapshot === "function" && canSnapshot();
+      if (canSave) b6HoldFrame = requestAnimationFrame(paintB6Hold);
+      b6HoldTimer = window.setTimeout(() => {
+        b6HoldTimer = null;
+        if (!b6Holding || selectorOpen) return;
+        b6HoldFired = true;
+        suppressNextB6Click = true;
+        if (suppressB6ClickTimer) clearTimeout(suppressB6ClickTimer);
+        suppressB6ClickTimer = window.setTimeout(() => { suppressNextB6Click = false; }, 1000);
+        if (canSave) {
+          setB6HoldFill(100);
+          onSnapshot?.();
+        }
+      }, B6_HOLD_MS);
+    });
+    b6.addEventListener("pointerup", (event) => {
+      if (b6HoldFired) event.preventDefault();
+      cancelB6Hold();
+    });
+    ["pointercancel", "pointerleave"].forEach((type) => b6.addEventListener(type, cancelB6Hold));
 
     function showSelector() {
       normalState = buttons.map(snapshotButton);
@@ -103,10 +227,6 @@ window.InterPhaceShell = (() => {
       });
     }
 
-    function hrefFor(phace) {
-      return isRoot ? phace.rootHref : phace.childHref;
-    }
-
     // Capture phase is intentional: while selector mode is open, the shell
     // temporarily owns B1-B6 without firing the page's normal button handlers.
     row.addEventListener("click", (event) => {
@@ -114,6 +234,15 @@ window.InterPhaceShell = (() => {
       if (!button || !row.contains(button)) return;
 
       const index = Number(button.id.replace("shellB", "")) - 1;
+
+      if (index === 5 && suppressNextB6Click) {
+        suppressNextB6Click = false;
+        if (suppressB6ClickTimer) clearTimeout(suppressB6ClickTimer);
+        suppressB6ClickTimer = null;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
 
       if (!selectorOpen) {
         if (index !== 5) return;
@@ -134,7 +263,7 @@ window.InterPhaceShell = (() => {
         return;
       }
 
-      window.location.href = hrefFor(targetPhace);
+      window.location.href = hrefForPhace(currentPhace, targetPhace);
     }, true);
 
     return {
@@ -331,12 +460,6 @@ window.InterPhaceShell = (() => {
 
 
   function installKeyboardPhaceNavigation(currentPhace) {
-    const isRoot = currentPhace === "interPhace";
-
-    function hrefFor(phace) {
-      return isRoot ? phace.rootHref : phace.childHref;
-    }
-
     function isEditableTarget(target) {
       if (!target || !(target instanceof Element)) return false;
       return Boolean(
@@ -348,7 +471,7 @@ window.InterPhaceShell = (() => {
       const currentIndex = PHACES.findIndex((phace) => phace.key === currentPhace);
       if (currentIndex < 0) return;
       const nextIndex = (currentIndex + offset + PHACES.length) % PHACES.length;
-      window.location.href = hrefFor(PHACES[nextIndex]);
+      window.location.href = hrefForPhace(currentPhace, PHACES[nextIndex]);
     }
 
     window.addEventListener("keydown", (event) => {
@@ -460,6 +583,8 @@ window.InterPhaceShell = (() => {
       getAuditionState,
       isPlaying,
       auditionDisabled = false,
+      canSnapshot,
+      onSnapshot,
     } = config;
 
     const appRoot = document.querySelector(app);
@@ -514,7 +639,7 @@ window.InterPhaceShell = (() => {
       window.removeEventListener(auditionStateEvent, syncPlaying);
     }, { once: true });
 
-    const phaceSelector = installPhaceSelector(appRoot, name);
+    const phaceSelector = installPhaceSelector(appRoot, name, { canSnapshot, onSnapshot });
     installKeyboardPhaceNavigation(name);
 
     return { auditionBtn, syncPlaying, phaceSelector };
@@ -532,5 +657,6 @@ window.InterPhaceShell = (() => {
     paintBeforeSynchronousWork,
     readMixerChannelGain,
     swungSixteenthTime,
+    snapshots,
   };
 })();

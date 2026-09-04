@@ -398,13 +398,17 @@ FMEngine.build = function (ctx, baseFreq, fmParams, noteLength) {
     const layerGain = ctx.createGain();
     layerGain.gain.setValueAtTime(0, t0);
 
+    const prettyGain = ctx.createGain();
+    prettyGain.gain.setValueAtTime(1, t0);
     oscillator.connect(layerGain);
-    layerGain.connect(mixer);
+    layerGain.connect(prettyGain);
+    prettyGain.connect(mixer);
     addCleanHarmonics(layerFreq, gain);
 
     const offset = clamp(layer.noteOffset, -36, 36);
     companions.push({
       gain: layerGain.gain,
+      prettyGain: prettyGain.gain,
       detune: oscillator.detune,
       baseGain: gain,
       laneIndex,
@@ -435,6 +439,8 @@ FMEngine.build = function (ctx, baseFreq, fmParams, noteLength) {
     carrier,
     modulationTargets: {
       detune: carrier.detune,
+      carrierGain: carrierGain.gain,
+      carrierBaseGain: clamp(fmParams.carrierVolume, 0, 127) / 127,
       fmAmount: mod1Amount ? mod1Amount.gain : null,
       fmBaseDeviation: mod1Deviation,
       companions,

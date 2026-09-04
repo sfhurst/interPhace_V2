@@ -5,10 +5,12 @@
 
 ## Permanent bottom row
 
+Before any button page is opened, direct interPhace loads show the non-button startup splash: a large animated `interPhace` wordmark with no active B1-B5 button. The normal shared top/bottom shell remains present. Contextual returns from a child Phace bypass the splash and open the relevant B5 settings page.
+
 | Button | Current function | Pages / behavior | Status |
 |---|---|---|---|
 | B1 | Project | `app1_b1_p1` — Project Name, Root, Scale, Tempo, Length, Swing, and Timing controls owned by interPhace | Live |
-| B2 | Mixer | `app1_b2_p1` — Synth/Kick/Snare/Hat/Noise/Drone dB controls; mute skips render work | Live / audition-wired |
+| B2 | Mixer | `app1_b2_p1` — dynamic ARP/SYNTH, Kick, Snare, Hat, Noise, and Drone dB controls; ARP/SYNTH Playback and Drone/Noise Opposed Orbit; mute skips render work | Live / audition-wired |
 | B3 | Import | `app1_b3_p1` — Projects / Patches / MIDI / Kits selection grid | Live |
 | B4 | Export | `app1_b4_p1` — Projects / Patches / MIDI / Audio selection grid and export actions | Live |
 | B5 | Child Phace Settings | Recycled settings pages for synthPhace, arpPhace, drumPhace, noisePhace, dronePhace | Live |

@@ -102,6 +102,33 @@ button, input { font: inherit; }
 
 .macroValue.preset-modified { opacity: 0.42; }
 
+/* FM B4 P3: a deliberately single-purpose freeform control. It remains inside
+   the normal panel chassis and never changes global slider or grid geometry. */
+.drawn-envelope-panel { gap: 14px; }
+.drawn-envelope-area {
+  position: relative;
+  width: 100%;
+  height: clamp(210px, 33vh, 300px);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--panel) 86%, var(--bg));
+  touch-action: none;
+  overflow: hidden;
+}
+.drawn-envelope-canvas { position: absolute; inset: 0; display: block; }
+.drawn-envelope-anchor {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--synth);
+  border-radius: 50%;
+  background: var(--bg);
+  transform: translate(-50%, 50%);
+  pointer-events: none;
+}
+.drawn-envelope-start { left: 18px; bottom: 18px; }
+.drawn-envelope-end { left: calc(100% - 18px); bottom: 18px; }
+
 
 /* Build 145: authoritative drumPhace B2 control-layout template for synthPhace. */
 .drum-synth-stage {

@@ -1119,7 +1119,7 @@ select,
 }
 
 .melodyClearButton.isClearHolding::before {
-  animation: melodyClearHoldFill 700ms linear forwards;
+  animation: melodyClearHoldFill 700ms linear 200ms forwards;
 }
 
 @keyframes melodyClearHoldFill {

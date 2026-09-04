@@ -29,10 +29,31 @@
   }
 
   function envelopeLength(legacyPatch) {
+    const drawn = legacyPatch?.envelope?.drawn;
+    if (drawn?.active && drawn?.valid && Array.isArray(drawn.curve) && drawn.curve.length >= 8) {
+      return Math.max(.02, Math.min(20, Number(drawn.duration) || 2));
+    }
     if (!window.AmpEnvelopeEngine?.computeLength) {
       throw new Error("synthPhace envelope engine is unavailable.");
     }
     return window.AmpEnvelopeEngine.computeLength(legacyPatch?.envelope?.ahdhd || {});
+  }
+
+  function buildVoice(ctx, patch) {
+    const frequency = midiToFrequency(patch.midiNote);
+    if (patch.synth?.engine?.mode === "pretty") {
+      if (!window.PrettyEngine?.build || !window.PrettyEnvelopeEngine?.apply) throw new Error("synthPhace Pretty engine is unavailable.");
+      const source = window.PrettyEngine.build(ctx, frequency, patch.synth?.pretty || {}, 2);
+      return { source, envelope: window.PrettyEnvelopeEngine.apply(ctx, source.node, patch.synth?.prettyEnvelope || {}, source.targets) };
+    }
+    if (!window.FMEngine?.build || !window.AmpEnvelopeEngine?.apply) throw new Error("synthPhace FM engine is unavailable.");
+    const source = window.FMEngine.build(ctx, frequency, patch.synth?.fm || {}, envelopeLength(patch));
+    const drawn = patch.envelope?.drawn;
+    if (drawn?.active && drawn?.valid && window.DrawnEnvelopeEngine?.apply) {
+      const envelope = window.DrawnEnvelopeEngine.apply(ctx, source.node, drawn);
+      if (envelope) return { source, envelope };
+    }
+    return { source, envelope: window.AmpEnvelopeEngine.apply(ctx, source.node, patch.envelope?.ahdhd || {}, source.modulationTargets) };
   }
 
   function ensurePlaybackContext() {
@@ -162,23 +183,13 @@
   }
 
   function buildGraph(ctx, legacyPatch, gateSeconds = null, effectsReleaseSeconds = 0.120) {
-    if (!window.FMEngine?.build) throw new Error("synthPhace FM engine is unavailable.");
-    if (!window.AmpEnvelopeEngine?.apply) throw new Error("synthPhace envelope engine is unavailable.");
     if (!window.TransientSourceEngine?.apply) throw new Error("synthPhace transient source engine is unavailable.");
     if (!window.FilterEngine?.apply) throw new Error("synthPhace filter engine is unavailable.");
     if (!window.TextureEngine?.apply) throw new Error("synthPhace texture engine is unavailable.");
     if (!window.EffectsEngine?.applyAll) throw new Error("synthPhace effects engine is unavailable.");
 
-    const duration = envelopeLength(legacyPatch);
-    const frequency = midiToFrequency(legacyPatch.midiNote);
-    const source = window.FMEngine.build(ctx, frequency, legacyPatch.synth.fm, duration);
-
-    const envelope = window.AmpEnvelopeEngine.apply(
-      ctx,
-      source.node,
-      legacyPatch.envelope.ahdhd,
-      source.modulationTargets,
-    );
+    const voice = buildVoice(ctx, legacyPatch);
+    const envelope = voice.envelope;
 
     const transient = window.TransientSourceEngine.apply(
       ctx,
@@ -257,11 +268,11 @@
     limiter.connect(ctx.destination);
 
     return {
-      source,
+      source: voice.source,
       envelope,
       performanceLength,
-      frequency,
-      inspection: source.inspection,
+      frequency: midiToFrequency(legacyPatch.midiNote),
+      inspection: voice.source.inspection,
       mixer: synthMixer,
     };
   }
@@ -474,7 +485,7 @@
       tempo: Math.max(30, Math.min(300, Number(tempo) || 75)),
     };
 
-    const naturalLength = envelopeLength(patch);
+    const naturalLength = patch.synth?.engine?.mode === "pretty" ? 2 : envelopeLength(patch);
     const safeGateSeconds = Math.max(0.01, Number(gateSeconds) || 0.01);
     const noteLength = Math.min(naturalLength, safeGateSeconds);
     const ctx = new OfflineAudioContextClass(
@@ -483,15 +494,8 @@
       SAMPLE_RATE
     );
 
-    const frequency = midiToFrequency(patch.midiNote);
-    const source = window.FMEngine.build(ctx, frequency, patch.synth.fm, naturalLength);
-
-    const envelope = window.AmpEnvelopeEngine.apply(
-      ctx,
-      source.node,
-      patch.envelope.ahdhd,
-      source.modulationTargets,
-    );
+    const voice = buildVoice(ctx, patch);
+    const envelope = voice.envelope;
 
     const transient = window.TransientSourceEngine.apply(
       ctx,

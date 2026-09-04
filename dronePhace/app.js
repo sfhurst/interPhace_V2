@@ -887,6 +887,10 @@ const shellBinding = window.InterPhaceShell?.bind({
   text: getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#f0f1f3",
   muted: getComputedStyle(document.documentElement).getPropertyValue("--muted").trim() || "#777d87",
   getAuditionState: () => auditionState,
+  canSnapshot: () => window.InterPhaceShell?.snapshots?.hasOpenSlot("dronePhace"),
+  onSnapshot: () => window.InterPhaceShell?.snapshots?.save("dronePhace", {
+    state: JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"),
+  }),
 });
 shellBinding?.auditionBtn?.addEventListener("click", toggleAudition);
 

@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0c0d0f" />
     <title>interPhace - interPhace</title>
-    <link rel="stylesheet" href="style.css" />
-    <link rel="stylesheet" href="shared/shell.css?v=487" />
-    <script src="app.js?v=488" defer></script>
+    <link rel="stylesheet" href="style.css?v=506" />
+    <link rel="stylesheet" href="shared/shell.css?v=508" />
+    <script src="app.js?v=509" defer></script>
     <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="favicon.ico" type="image/x-icon">
 </head>
   <body id="app1">
@@ -15,6 +15,10 @@
       <header id="shellTop" class="shell-top" aria-label="interPhace top bar"></header>
 
       <section id="shellMiddle" class="shell-middle">
+        <section id="app1_startup" class="app1-page app1-startup-page" aria-label="interPhace startup">
+          <div class="app1-startup-mark">interPhace</div>
+        </section>
+
         <section id="app1_b1_p1" class="app1-page" aria-label="Project">
           <div class="app1-panel">
             <div id="app1_b1_p1_title" class="app1-title">project</div>
@@ -58,15 +62,17 @@
           <div class="app1-panel">
             <div id="app1_b2_p1_title" class="app1-title">mixer</div>
             <div class="app1-controls">
-              <label class="macroControl"><span class="macroLabel">Synth</span><input id="app1_b2_p1_synth" class="macroSlider mixerSlider" data-channel="synth" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_synth_value" class="macroValue">0 dB</span></label>
+              <label class="macroControl mixerChannel mixerChannel-synth"><span id="app1_b2_p1_synth_label" class="macroLabel">Synth</span><input id="app1_b2_p1_synth" class="macroSlider mixerSlider" data-channel="synth" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_synth_value" class="macroValue">0 dB</span></label>
               
-              <label class="macroControl"><span class="macroLabel">Kick</span><input id="app1_b2_p1_kick" class="macroSlider mixerSlider" data-channel="kick" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_kick_value" class="macroValue">0 dB</span></label>
-              <label class="macroControl"><span class="macroLabel">Snare</span><input id="app1_b2_p1_snare" class="macroSlider mixerSlider" data-channel="snare" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_snare_value" class="macroValue">0 dB</span></label>
-              <label class="macroControl"><span class="macroLabel">Hat</span><input id="app1_b2_p1_hat" class="macroSlider mixerSlider" data-channel="hat" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_hat_value" class="macroValue">0 dB</span></label>
-              <label class="macroControl"><span class="macroLabel">Noise</span><input id="app1_b2_p1_noise" class="macroSlider mixerSlider" data-channel="noise" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_noise_value" class="macroValue">0 dB</span></label>
-              <label class="macroControl"><span class="macroLabel">Drone</span><input id="app1_b2_p1_drone" class="macroSlider mixerSlider" data-channel="drone" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_drone_value" class="macroValue">0 dB</span></label>
-              <label class="app1ToggleControl app1PairedControl mixerArpTriggerToggle"><span class="macroLabel">Arp / Synth Pattern</span><input id="app1_b2_p1_arpTrigger" type="checkbox" /><span class="toggleTrack" aria-hidden="true"></span></label>
-              <label class="app1ToggleControl app1PairedControl mixerDroneNoiseLinkToggle"><span class="macroLabel">Drone / Noise Link</span><input id="app1_b2_p1_droneNoiseLink" type="checkbox" /><span class="toggleTrack" aria-hidden="true"></span></label>
+              <label class="macroControl mixerChannel mixerChannel-kick"><span class="macroLabel">Kick</span><input id="app1_b2_p1_kick" class="macroSlider mixerSlider" data-channel="kick" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_kick_value" class="macroValue">0 dB</span></label>
+              <label class="macroControl mixerChannel mixerChannel-snare"><span class="macroLabel">Snare</span><input id="app1_b2_p1_snare" class="macroSlider mixerSlider" data-channel="snare" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_snare_value" class="macroValue">0 dB</span></label>
+              <label class="macroControl mixerChannel mixerChannel-hat"><span class="macroLabel">Hat</span><input id="app1_b2_p1_hat" class="macroSlider mixerSlider" data-channel="hat" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_hat_value" class="macroValue">0 dB</span></label>
+              <label class="macroControl mixerChannel mixerChannel-noise"><span class="macroLabel">Noise</span><input id="app1_b2_p1_noise" class="macroSlider mixerSlider" data-channel="noise" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_noise_value" class="macroValue">0 dB</span></label>
+              <label class="macroControl mixerChannel mixerChannel-drone"><span class="macroLabel">Drone</span><input id="app1_b2_p1_drone" class="macroSlider mixerSlider" data-channel="drone" type="range" min="-60" max="6" step="0.5" value="0" /><span id="app1_b2_p1_drone_value" class="macroValue">0 dB</span></label>
+              <div class="interphace-toggle-group">
+                <label class="app1ToggleControl app1PairedControl mixerArpTriggerToggle"><span class="macroLabel">Arp / Synth Playback</span><input id="app1_b2_p1_arpTrigger" type="checkbox" aria-label="Arp or synth playback" /><span class="toggleTrack" aria-hidden="true"></span></label>
+                <label class="app1ToggleControl app1PairedControl mixerDroneNoiseLinkToggle"><span class="macroLabel">Drone / Noise Opposed Orbit</span><input id="app1_b2_p1_droneNoiseLink" type="checkbox" aria-label="Drone and noise opposed orbit" /><span class="toggleTrack" aria-hidden="true"></span></label>
+              </div>
             </div>
           </div>
         </section>
@@ -99,7 +105,10 @@
                 <label class="macroControl"><span class="macroLabel">Global Trigger Interval</span><input id="app1_b5_p1_loopLength" class="macroSlider" type="range" min="1" max="16" step="1" value="4" /><span id="app1_b5_p1_loopLength_value" class="macroValue">4 bars</span></label>
                 <label class="macroControl"><span class="macroLabel">Effects Release</span><input id="app1_b5_p1_effectsRelease" class="macroSlider" type="range" min="0" max="57" step="1" value="11" /><span id="app1_b5_p1_effectsRelease_value" class="macroValue">120 ms</span></label>
                 <label class="macroControl"><span class="macroLabel">Loop Voice Length</span><input id="app1_b5_p1_auditionLength" class="macroSlider" type="range" min="1" max="6" step="1" value="6" /><span id="app1_b5_p1_auditionLength_value" class="macroValue">Full</span></label>
-                <label class="app1ToggleControl app1PairedControl synthLoopToggle"><span class="macroLabel">Loop Audition</span><input id="app1_b5_p1_auditionLoop" type="checkbox" /><span class="toggleTrack" aria-hidden="true"></span></label>
+                <div class="interphace-toggle-group">
+                  <label class="app1ToggleControl app1PairedControl synthLoopToggle"><span class="macroLabel">Loop Audition</span><input id="app1_b5_p1_auditionLoop" type="checkbox" /><span class="toggleTrack" aria-hidden="true"></span></label>
+                  <label class="app1ToggleControl app1PairedControl synthEngineToggle"><span class="macroLabel">FM / Pretty Engine</span><input id="app1_b5_p1_synthEngine" type="checkbox" aria-label="Pretty engine" /><span class="toggleTrack" aria-hidden="true"></span></label>
+                </div>
               </div>
             </div>
           </div>
@@ -197,6 +206,6 @@
     </main>
 
     <script src="shared/bed-loop.js"></script>
-<script src="shared/shell.js"></script>
+<script src="shared/shell.js?v=499"></script>
   </body>
 </html>

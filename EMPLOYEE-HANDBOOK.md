@@ -44,6 +44,7 @@
 - Do not invent a Phace-specific control style when an official template already exists.
 - **Background Selection Grid standard:** use the shared `backgroundSelectionGrid` toolbox control for page-alignment/selection scaffolds. It matches drumPhace B1 geometry (16 rows; 4 columns on phone, 8 on larger screens; same label track and gaps), keeps unused cells invisible/inert, reveals only explicitly activated cells, and uses uniform 1px cell borders with no heavier musical row dividers.
 - **Background grid placement is intentional per page:** fixed-row controls stay at their designed rows; predictive-row controls keep their assigned columns but move vertically to the first safe row below foreground controls. Do not make every grid control predictive by default. Current predictive example: synthPhace EQ range buttons. Current fixed examples: Import/Export and iP B5 snapshot buttons.
+- **Hold-fill standard — Build 499:** all existing visible long-press fills complete at 900 ms. New Project and Export begin filling immediately; all other visible hold fills wait 200 ms, then fill over 700 ms. Long-press actions without a fill remain intentionally silent.
 - **Responsive target:** optimize for reasonable modern phone, tablet/iPad, and normal laptop/desktop viewports. Do not shrink touch targets, distort the grid, or invent cramped fallback layouts merely to support unusably small windows.
 - Per-page classes may extend Background Selection Grid styling without changing the shared geometry.
 
@@ -54,6 +55,51 @@
 ## Project documentation
 - `APP-BUTTON-PAGE-PLAN.md` is permanent architecture documentation and should stay current when the app/button/page plan changes.
 - This handbook is permanent project guidance and must be read before every build.
+
+## Current development roadmap
+- This list records the currently agreed quick fixes and feature additions. It is not a required implementation order; the project manager may choose any item for the next build.
+
+1. **Phace Snapshots — implemented in Builds 497-499**
+   - Long-pressing a Phace's B6 saves that Phace's complete state.
+   - Save into the next open snapshot slot on that Phace's interPhace B5 page.
+   - Tapping a populated snapshot restores it; holding it clears it and compacts later snapshots forward.
+   - Snapshots are local-only: New Project, import, export, and patch files do not affect them.
+2. **Contextual Return to interPhace — implemented in Build 491**
+   - Navigating from a Phace to interPhace through the shared Phace selector or PageUp/PageDown navigation opens B5 on that Phace's settings page.
+   - Direct interPhace loads continue to restore the previously saved interPhace page.
+3. **Sequencer Smart Entry — implemented in Build 492**
+   - Tapping an empty interPhace B2 Sequencer step inserts the next logical bar in that lane and opens the selector.
+   - With no earlier populated step in the lane, the default is Bar 1 / Melody 1.1.
+   - The nearest earlier populated step in the same lane determines the next value: M3.3 becomes M3.4, and so on.
+   - Melody progresses M1.8 to M2.1 through M4.8 to M1.1; drum lanes progress 8 to 1.
+   - An eight-bar run requires eight touches instead of sixteen.
+4. **Dual-Bed noisePhace / dronePhace**
+   - Add a second B1-B4 page/state set: Bed A and Bed B.
+   - Only one bed plays except during crossfades.
+   - interPhace B4 adds Crossfade Duration and Crossfade Interval.
+   - Future direction: additional beds with dedicated Sequencer lanes.
+5. **Better Export Progress — implemented in Build 500**
+   - B4 shows render progress and the current part/file being processed in its row-16 export-only display.
+   - The display expands only through B4's otherwise unused row-16 grid space; shared grid behavior is unchanged.
+6. **synthPhace Page Reorganization — implemented in Build 501**
+   - B1 now contains Carrier / Harmonics, FM, and Texture / Transient.
+   - B4 P2 contains Behavior / Character alongside B4 P1 Envelope controls.
+   - Existing control IDs, patches, and synthesis behavior remain unchanged.
+7. **FM / Pretty Subtractive synthPhace**
+   - interPhace adds an FM / Pretty Subtractive selector.
+   - synthPhace B1 P2 changes controls according to the selected engine.
+   - FM mode exposes FM controls; Pretty Subtractive exposes subtractive controls.
+   - Only the selected synthesis engine is present in the audio path.
+8. **interPhace Startup Splash Screen — implemented in Builds 495-496**
+   - Direct interPhace loads open a non-button startup page with the normal shared top and bottom rows.
+   - The splash displays only the large `interPhace` wordmark in the established Build 34 placeholder typography: Arial/Helvetica, 700 weight, tight letter spacing, and responsive 30-54 px sizing.
+   - The first direct interPhace load in a browser tab session opens the splash. Reloads in that tab restore the persisted current interPhace page; closing the tab starts a new session and shows the splash again.
+   - The wordmark animates once on startup: undersized, slightly oversize, then settled. It does not loop.
+   - B1-B5 leave the splash for their existing interPhace pages. B6 opens the normal Phace selector; selecting active `iP` simply closes the selector and leaves the splash visible.
+   - Contextual child-Phace returns remain authoritative and open their designated B5 settings page instead of the splash.
+9. **Column Colors for interPhace Sequencer Lanes — implemented in Builds 492-494**
+   - Populated Melody, Kick, Snare, and Hat steps use respectively bright arp orange, kick red, snare green, and hat yellow borders/text.
+   - Empty lane steps use the corresponding dim identity border. Kick, Snare, and Hat reuse their established drum ghost colors; Melody uses the matching dim arp-orange treatment.
 
 
 ## Preset data truth standard
@@ -239,13 +285,14 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 - Patch schema v2 is current; retain v1 import compatibility.
 - Project import/export embeds and restores the same child Patch contracts rather than maintaining a second divergent state definition.
 
-### interPhace mixer relationship controls — Build 305
+### interPhace mixer relationship controls — Build 506
 - Relationship controls live at the bottom of interPhace Mixer, below the six level sliders.
-- Canonical labels: `Arp / Synth Control` and `Drone / Noise Link`.
+- Canonical labels: `Arp / Synth Playback` and `Drone / Noise Opposed Orbit`.
+- Mixer sliders use the identity color of the Phace or drum lane they control. The shared Synth mixer channel presents as ARP/orange while Arp playback is selected and SYNTH/blue while Synth playback is selected; its stored level and audio channel remain `synth`.
 - Both use the exact `app1ToggleControl app1PairedControl` + `toggleTrack` contract.
 - Drone/Noise Link belongs to interPhace mixer/project state, not noisePhace patch state.
 - noisePhace B4 contains only Width, Delay, Reverb, Space Motion, Distance, Preset.
-- LINK Off = independent child Space Motion. LINK On with both beds active = exact tested opposed orbit.
+- Opposed Orbit Off = independent child Space Motion. Opposed Orbit On with both beds active = exact tested opposed orbit.
 - Shared bed auditions use `InterPhaceShell.paintBeforeSynchronousWork()` before heavy synchronous rendering.
 - Rendering cursor stays normal; state is communicated by dim stop icon only.
 
@@ -610,6 +657,12 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 - Visual template classes must be added alongside existing Phace behavioral classes unless those original classes are proven unused.
 - Never replace classes used by JavaScript for page discovery, navigation, control grouping, or state.
 - synthPhace keeps `synth-page`, `page-title`, and `control-stack` even while also using the drumPhace B2 visual-template classes.
+
+### Shared Phace startup contract
+
+- A Phace's primary `app.js` restores saved UI state and renders its saved page/button state before optional audition or render engines initialize.
+- Data required to interpret that UI state may load first; audio engines and other non-UI modules load afterward.
+- Do not add a Phace-specific boot script or first-paint workaround when ordinary script order can meet this contract.
 
 ### Recycled bottom-button numbering
 - Any bottom button that displays a logical page number must participate in the shared `.navBtn` button contract so icon sizing, number sizing, number spacing, press behavior, and alignment match exactly.

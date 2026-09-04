@@ -573,6 +573,19 @@ select,
 /* Build 154: custom six-Phace convergence glyph for normal B6 gateway mode. */
 .shell-bottom-main:not(.phace-selector-open) #shellB6.shell-phace-btn {
   color: var(--shell-text, #f0f1f3);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.shell-bottom-main:not(.phace-selector-open) #shellB6.shell-phace-btn::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: var(--snapshot-hold-fill, 0%);
+  background: color-mix(in srgb, var(--shell-accent, #8d939c) 34%, transparent);
+  pointer-events: none;
 }
 
 .shell-bottom-main:not(.phace-selector-open) #shellB6.shell-phace-btn .phace-convergence-icon {
@@ -697,6 +710,13 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   --interphace-control-inset: 12px;
   --interphace-title-gap: 10px;
   --interphace-slider-label-gap: 7px;
+  /* Eight fixed control positions share the usable control height.
+     The 2px trim is intentional: it preserves the chassis while leaving
+     cumulative clearance before a half-grid begins beneath four controls. */
+  --interphace-control-slot-trim: 2px;
+  --interphace-toggle-group-gap: 8px;
+  --interphace-toggle-control-height: 32px;
+  --interphace-toggle-control-half-height: 16px;
 }
 
 .drum-synth-stage {
@@ -735,11 +755,11 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, calc(12.5% - var(--interphace-control-slot-trim))));
   grid-auto-flow: row;
   gap: 0;
   align-items: stretch;
-  align-content: stretch;
+  align-content: start;
 }
 
 .macroControl {
@@ -858,11 +878,11 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, calc(12.5% - var(--interphace-control-slot-trim))));
   grid-auto-flow: row;
   gap: 0;
   align-items: stretch;
-  align-content: stretch;
+  align-content: start;
 }
 
 /* Non-slider controls still occupy one canonical slot, but keep their
@@ -874,14 +894,32 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   margin: 0;
 }
 
-#app1_b1_p1 .app1ProjectNameInput {
-  height: 34px;
+/* A paired toggle group consumes two canonical control slots. Its first
+   toggle remains centered in the first slot; its second uses the compact
+   shared rhythm below it. */
+.interphace-toggle-group {
+  grid-row: span 2;
+  min-height: 0;
+  position: relative;
 }
 
-/* Retire the Build 310 visual compensation. Equal slots now provide the
-   intended relationship spacing without a negative margin. */
-#app1_b2_p1 .mixerDroneNoiseLinkToggle {
-  margin-top: 0;
+.interphace-toggle-group > .app1PairedControl {
+  position: absolute;
+  left: 0;
+  height: var(--interphace-toggle-control-height);
+  min-height: var(--interphace-toggle-control-height);
+}
+
+.interphace-toggle-group > .app1PairedControl:first-child {
+  top: calc(25% - var(--interphace-toggle-control-half-height));
+}
+
+.interphace-toggle-group > .app1PairedControl:nth-child(2) {
+  top: calc(25% + var(--interphace-toggle-control-half-height) + var(--interphace-toggle-group-gap));
+}
+
+#app1_b1_p1 .app1ProjectNameInput {
+  height: 34px;
 }
 
 @media (max-width: 420px) {

@@ -1,5 +1,8 @@
 :root {
   --phace-synth: #00aaff;
+  --phace-kick: #ff4b4b;
+  --phace-snare: #4ee26b;
+  --phace-hat: #f1d74c;
   --phace-drum: #ff4b4b;
   --phace-arp: #d98245;
   --phace-noise: #a56cff;
@@ -458,6 +461,33 @@ select,
   display: none;
 }
 
+.app1-startup-page {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.app1-startup-mark {
+  color: var(--shell-text, #f2f3f5);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(30px, 8vw, 54px);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  animation: interPhace-startup-settle 620ms cubic-bezier(0.18, 0.85, 0.25, 1) both;
+}
+
+@keyframes interPhace-startup-settle {
+  0% { transform: scale(0.92); }
+  62% { transform: scale(1.075); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app1-startup-mark { animation: none; }
+}
+
 .app1-panel {
   width: 100%;
   max-width: none;
@@ -594,6 +624,20 @@ select,
   opacity: .38;
 }
 
+/* Mixer channels use the same identity colors as their Phaces and drum lanes. */
+#app1_b2_p1 .mixerChannel-synth { color: var(--phace-synth); }
+#app1_b2_p1 .mixerChannel-arp { color: var(--phace-arp); }
+#app1_b2_p1 .mixerChannel-kick { color: var(--phace-kick); }
+#app1_b2_p1 .mixerChannel-snare { color: var(--phace-snare); }
+#app1_b2_p1 .mixerChannel-hat { color: var(--phace-hat); }
+#app1_b2_p1 .mixerChannel-noise { color: var(--phace-noise); }
+#app1_b2_p1 .mixerChannel-drone { color: var(--phace-drone); }
+
+#app1_b2_p1 .mixerChannel .macroLabel,
+#app1_b2_p1 .mixerChannel .macroValue {
+  color: inherit;
+}
+
 .app1ToggleControl {
   min-height: 32px;
   cursor: pointer;
@@ -672,6 +716,8 @@ select,
   z-index: 1;
 }
 
+.app1-settings-panel > .app1BackgroundSelectionGrid { z-index: 3; }
+
 .app1-settings-content {
   position: relative;
   z-index: 2;
@@ -718,11 +764,21 @@ select,
 
 .backgroundSelectionCell.snapshotButton {
   color: var(--shell-muted, #777d87);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
 }
 
-.backgroundSelectionCell.snapshotButton:active {
-  color: var(--shell-accent, #8d939c);
-  border-color: var(--shell-accent, #8d939c);
+.backgroundSelectionCell.snapshotButton.is-saved {
+  color: var(--settings-phace-color, var(--shell-accent, #8d939c));
+  border-color: var(--settings-phace-color, var(--shell-accent, #8d939c));
+}
+
+.backgroundSelectionCell.snapshotButton::before {
+  content: ""; position: absolute; z-index: -1; inset: 0 auto 0 0;
+  width: var(--snapshot-clear-fill, 0%);
+  background: color-mix(in srgb, var(--settings-phace-color, var(--shell-accent, #8d939c)) 34%, transparent);
+  pointer-events: none;
 }
 
 
@@ -834,6 +890,10 @@ select,
 }
 
 .synthLoopToggle input:checked + .toggleTrack::after {
+  background: var(--phace-synth) !important;
+}
+
+.synthEngineToggle input:checked + .toggleTrack::after {
   background: var(--phace-synth) !important;
 }
 
@@ -1110,25 +1170,6 @@ select,
 
 /* Remove the incorrect inverse height compression from Build 308. */
 
-/* Build 310: relationship-toggle pair spacing.
-   The pair stays in the canonical controls stack; only the space between the
-   two related toggles is tightened to resemble the internal rhythm of a slider control. */
-#app1_b2_p1 .mixerDroneNoiseLinkToggle {
-  margin-top: -12px;
-}
-
-@media (min-height: 760px) {
-  #app1_b2_p1 .mixerDroneNoiseLinkToggle {
-    margin-top: -18px;
-  }
-}
-
-@media (min-height: 900px) {
-  #app1_b2_p1 .mixerDroneNoiseLinkToggle {
-    margin-top: -24px;
-  }
-}
-
 /* Build 316: interPhace B2/P2 Sequencer clones the canonical arpPhace Melody grid chassis. */
 #app1_b2_p2.app1-sequencer-page {
   min-width: 0;
@@ -1148,6 +1189,10 @@ select,
   --seq-label-width: 28px;
   --seq-grid-gap: clamp(2px, 0.65vw, 5px);
   --seq-radius: 4px;
+  --sequencer-melody-dim: color-mix(in srgb, var(--phace-arp) 45%, var(--shell-line, #25282d));
+  --sequencer-kick-dim: #7b2b2f;
+  --sequencer-snare-dim: #28743c;
+  --sequencer-hat-dim: #766a2e;
   min-width: 0;
   min-height: 0;
   width: 100%;
@@ -1289,6 +1334,19 @@ html:not(.interphase-ready) #shellMiddle {
   line-height: 1;
 }
 
+#app1_b2_p2 .interSequencerCell.melodyTrack:not(.isSequenced) {
+  border-color: var(--sequencer-melody-dim);
+}
+#app1_b2_p2 .interSequencerCell.kickTrack:not(.isSequenced) {
+  border-color: var(--sequencer-kick-dim);
+}
+#app1_b2_p2 .interSequencerCell.snareTrack:not(.isSequenced) {
+  border-color: var(--sequencer-snare-dim);
+}
+#app1_b2_p2 .interSequencerCell.hatTrack:not(.isSequenced) {
+  border-color: var(--sequencer-hat-dim);
+}
+
 #app1_b2_p2 .interSequencerCell.melodyTrack.isSequenced {
   border-color: var(--phace-arp);
   color: var(--phace-arp);
@@ -1337,6 +1395,8 @@ html:not(.interphase-ready) #shellMiddle {
 }
 
 .backgroundSelectionCell.utilityProgress {
+  grid-column: 3 / -1 !important;
+  z-index: 4;
   border-color: transparent !important;
   background: transparent !important;
   color: var(--shell-muted, #777d87);
@@ -1344,6 +1404,9 @@ html:not(.interphase-ready) #shellMiddle {
   cursor: default;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: visible;
+  text-align: left;
+  padding: 0 6px;
 }
 
 
