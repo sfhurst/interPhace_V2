@@ -101,6 +101,12 @@ select,
   cursor: pointer;
 }
 
+/* A hosted live session owns the top control's identity across Phace UIs. */
+.auditionBtn[data-runtime-session="true"] {
+  color: var(--shell-accent, #8d939c) !important;
+  border-color: var(--shell-accent, #8d939c) !important;
+}
+
 .shell-audition[disabled] {
   opacity: .28;
   cursor: default;

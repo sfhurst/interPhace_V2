@@ -29,11 +29,11 @@ window.InterPhaceShell = (() => {
   }
   const PHACES = [
     { key: "interPhace", label: "iP", color: "#f0f1f3", rootHref: "index.html", childHref: "../index.html" },
-    { key: "synthPhace", label: "sP", color: "#00aaff", rootHref: "synthPhace/index.html", childHref: "../synthPhace/index.html" },
-    { key: "arpPhace", label: "aP", color: "#ff9f43", rootHref: "arpPhace/index.html?v=200", childHref: "../arpPhace/index.html?v=200" },
-    { key: "drumPhace", label: "dP", color: "#ff4b4b", rootHref: "drumPhace/index.html", childHref: "../drumPhace/index.html" },
-    { key: "noisePhace", label: "nP", color: "#a76cff", rootHref: "noisePhace/index.html", childHref: "../noisePhace/index.html" },
-    { key: "dronePhace", label: "dP", color: "#66e0b3", rootHref: "dronePhace/index.html", childHref: "../dronePhace/index.html" },
+    { key: "synthPhace", label: "sP", color: "#00aaff", rootHref: "../synthPhace/index.html", childHref: "../synthPhace/index.html" },
+    { key: "arpPhace", label: "aP", color: "#ff9f43", rootHref: "../arpPhace/index.html?v=200", childHref: "../arpPhace/index.html?v=200" },
+    { key: "drumPhace", label: "dP", color: "#ff4b4b", rootHref: "../drumPhace/index.html", childHref: "../drumPhace/index.html" },
+    { key: "noisePhace", label: "nP", color: "#a76cff", rootHref: "../noisePhace/index.html", childHref: "../noisePhace/index.html" },
+    { key: "dronePhace", label: "dnP", color: "#66e0b3", rootHref: "../dronePhace/index.html", childHref: "../dronePhace/index.html" },
   ];
 
   const INTERPHACE_SETTINGS_PAGE = Object.freeze({
@@ -106,6 +106,93 @@ window.InterPhaceShell = (() => {
       ? `${href}?settings=${settingsPage}`
       : href;
   }
+
+  function navigateToPhace(currentPhace, targetPhace) {
+    const href = hrefForPhace(currentPhace, targetPhace);
+    if (window.top !== window) {
+      window.top.postMessage({
+        type: "interPhace:runtime-navigate",
+        href: new URL(href, window.location.href).href,
+      }, window.location.origin);
+      return;
+    }
+    window.location.href = href;
+  }
+
+  // V3 runtime bridge. A Phace owns the translation from its controls into a
+  // plain, complete sound-state payload; the persistent host never inspects
+  // the page's DOM. Standalone Phace pages deliberately remain no-ops here.
+  function postRuntimeMessage(type, payload = {}) {
+    if (window.top === window) return false;
+    try {
+      window.top.postMessage({ type, ...payload }, window.location.origin);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function cloneRuntimeState(state) {
+    try {
+      return JSON.parse(JSON.stringify(state));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  const runtime = Object.freeze({
+    session() {
+      try { return window.top === window ? null : window.top.InterPhaceRuntimeHost?.session?.() || null; }
+      catch (_) { return null; }
+    },
+    publishState(phace, state) {
+      if (typeof phace !== "string" || !PHACES.some((entry) => entry.key === phace)) return false;
+      const completeState = cloneRuntimeState(state);
+      if (!completeState || typeof completeState !== "object") return false;
+      return postRuntimeMessage("interPhace:runtime-state", { phace, state: completeState });
+    },
+    requestStart(phace, state) {
+      if (typeof phace !== "string" || !PHACES.some((entry) => entry.key === phace)) return false;
+      const completeState = cloneRuntimeState(state);
+      if (!completeState || typeof completeState !== "object") return false;
+      try {
+        if (window.top !== window && window.top.InterPhaceRuntimeHost?.start) {
+          window.top.InterPhaceRuntimeHost.start(phace, completeState);
+          return true;
+        }
+      } catch (_) {}
+      return postRuntimeMessage("interPhace:runtime-start", { phace, state: completeState });
+    },
+    requestGlobalStart(payload) {
+      const completePayload = cloneRuntimeState(payload);
+      if (!completePayload || typeof completePayload !== "object") return false;
+      try {
+        if (window.top !== window && window.top.InterPhaceRuntimeHost?.startGlobal) {
+          return window.top.InterPhaceRuntimeHost.startGlobal(completePayload);
+        }
+      } catch (_) {}
+      return postRuntimeMessage("interPhace:runtime-global-start", { payload: completePayload });
+    },
+    requestStop() {
+      try {
+        if (window.top !== window && window.top.InterPhaceRuntimeHost?.stop) {
+          window.top.InterPhaceRuntimeHost.stop();
+          return true;
+        }
+      } catch (_) {}
+      return postRuntimeMessage("interPhace:runtime-stop");
+    },
+    submitRenderedBed(phace, rendered) {
+      if (typeof phace !== "string" || !rendered?.left || !rendered?.right) return false;
+      try {
+        if (window.top !== window && window.top.InterPhaceRuntimeHost?.replaceRenderedBed) {
+          window.top.InterPhaceRuntimeHost.replaceRenderedBed(phace, rendered);
+          return true;
+        }
+      } catch (_) {}
+      return postRuntimeMessage("interPhace:runtime-rendered-bed", { phace, rendered });
+    },
+  });
 
   function snapshotButton(button) {
     return {
@@ -263,7 +350,7 @@ window.InterPhaceShell = (() => {
         return;
       }
 
-      window.location.href = hrefForPhace(currentPhace, targetPhace);
+      navigateToPhace(currentPhace, targetPhace);
     }, true);
 
     return {
@@ -471,7 +558,7 @@ window.InterPhaceShell = (() => {
       const currentIndex = PHACES.findIndex((phace) => phace.key === currentPhace);
       if (currentIndex < 0) return;
       const nextIndex = (currentIndex + offset + PHACES.length) % PHACES.length;
-      window.location.href = hrefForPhace(currentPhace, PHACES[nextIndex]);
+      navigateToPhace(currentPhace, PHACES[nextIndex]);
     }
 
     window.addEventListener("keydown", (event) => {
@@ -607,6 +694,7 @@ window.InterPhaceShell = (() => {
     installSpacebarAudition(appRoot, auditionBtn);
 
     function normalizedAuditionState() {
+      if (runtime.session()) return "playing";
       if (typeof getAuditionState === "function") {
         const state = String(getAuditionState() || "idle").toLowerCase();
         if (state === "rendering" || state === "playing") return state;
@@ -618,6 +706,11 @@ window.InterPhaceShell = (() => {
     function syncPlaying() {
       if (!auditionBtn) return;
       const state = normalizedAuditionState();
+      const session = runtime.session();
+      const source = PHACES.find((phace) => phace.key === session?.phace);
+      auditionBtn.style.setProperty("--shell-accent", source?.color || accent || "#8d939c");
+      if (source) auditionBtn.dataset.runtimeSession = "true";
+      else delete auditionBtn.dataset.runtimeSession;
       const active = state !== "idle";
       auditionBtn.classList.toggle("is-playing", active);
       auditionBtn.classList.toggle("is-rendering", state === "rendering");
@@ -631,8 +724,19 @@ window.InterPhaceShell = (() => {
     }
 
     syncPlaying();
+    auditionBtn?.addEventListener("click", event => {
+      if (!runtime.session()) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      runtime.requestStop();
+      window.dispatchEvent(new CustomEvent("interPhace:runtime-stop"));
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("interPhace:audition-state")), 0);
+    }, true);
     const auditionStateEvent = "interPhace:audition-state";
     window.addEventListener(auditionStateEvent, syncPlaying);
+    // A freshly navigated Phace may finish its own UI paint just after bind.
+    // Reassert the persistent session before the normal low-rate status timer.
+    [0, 16, 50].forEach(delay => window.setTimeout(syncPlaying, delay));
     const timer = window.setInterval(syncPlaying, 100);
     window.addEventListener("beforeunload", () => {
       clearInterval(timer);
@@ -658,5 +762,6 @@ window.InterPhaceShell = (() => {
     readMixerChannelGain,
     swungSixteenthTime,
     snapshots,
+    runtime,
   };
 })();

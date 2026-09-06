@@ -104,6 +104,7 @@ let auditionState = "idle";
 let auditionAudioContext = null;
 let auditionTransport = null;
 let auditionGeneration = 0;
+let liveRenderTimer = null;
 
 function notifyAuditionState() {
   window.dispatchEvent(new CustomEvent("interPhace:audition-state"));
@@ -123,6 +124,37 @@ function save() {
   document.querySelectorAll(".macroSlider").forEach(s => values[s.id] = Number(s.value));
   document.querySelectorAll(".presetSlider").forEach(s => presets[s.id] = Number(s.value));
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ activePage, values, presets }));
+  window.InterPhaceShell?.runtime?.publishState("dronePhace", {
+    version: 1,
+    activePage,
+    values,
+    presets,
+    mixer: window.InterPhaceShell?.readMixerChannelGain?.("drone", { respectMute: false }) || { db: 0, muted: false, gain: 1 },
+  });
+}
+
+function liveDroneSessionActive() {
+  return window.top !== window && window.InterPhaceShell?.runtime?.session?.()?.phace === "dronePhace";
+}
+
+function submitLiveDroneRender() {
+  if (!liveDroneSessionActive()) return;
+  const buffer = renderDroneBuffer(SAMPLE_RATE, AUDITION_SECONDS);
+  window.InterPhaceShell.runtime.submitRenderedBed("dronePhace", {
+    left: buffer.getChannelData(0),
+    right: buffer.getChannelData(1),
+    sampleRate: buffer.sampleRate,
+    gain: window.InterPhaceShell.readMixerChannelGain?.("drone", { respectMute: false })?.gain ?? 1,
+  });
+}
+
+function scheduleLiveDroneRender() {
+  if (!liveDroneSessionActive()) return;
+  if (liveRenderTimer) window.clearTimeout(liveRenderTimer);
+  liveRenderTimer = window.setTimeout(() => {
+    liveRenderTimer = null;
+    submitLiveDroneRender();
+  }, 550);
 }
 
 function showPage(page) {
@@ -796,6 +828,7 @@ window.DronePhaceRenderAPI = Object.freeze({
 });
 
 function stopAudition() {
+  if (window.top !== window && window.InterPhaceShell?.runtime?.session?.()) window.InterPhaceShell.runtime.requestStop();
   auditionGeneration++;
   auditionTransport?.stop?.();
   auditionTransport = null;
@@ -805,10 +838,32 @@ function stopAudition() {
 
 // Build 484: local audition survives all in-Phace navigation and edits.
 // Leaving this Phace always stops its local audition.
-window.addEventListener("pagehide", stopAudition);
-window.addEventListener("beforeunload", stopAudition, { once: true });
+window.addEventListener("pagehide", () => {
+  auditionGeneration++;
+  auditionTransport?.stop?.();
+  auditionTransport = null;
+  auditionState = "idle";
+});
+window.addEventListener("beforeunload", () => {
+  auditionGeneration++;
+  auditionTransport?.stop?.();
+  auditionTransport = null;
+}, { once: true });
+
+function liveDroneState() {
+  const values = {}, presets = {};
+  document.querySelectorAll(".macroSlider").forEach(s => values[s.id] = Number(s.value));
+  document.querySelectorAll(".presetSlider").forEach(s => presets[s.id] = Number(s.value));
+  return { version: 1, activePage, values, presets, project: readProjectContext(), mixer: window.InterPhaceShell?.readMixerChannelGain?.("drone", { respectMute: false }) || { db: 0, muted: false, gain: 1 } };
+}
 
 async function startAudition() {
+  if (window.top !== window && window.InterPhaceShell?.runtime) {
+    auditionState = "playing";
+    window.InterPhaceShell.runtime.requestStart("dronePhace", liveDroneState());
+    notifyAuditionState();
+    return;
+  }
   const generation = ++auditionGeneration;
   auditionState = "rendering";
   notifyAuditionState();
@@ -845,6 +900,12 @@ async function startAudition() {
 
 function toggleAudition(event) {
   event?.preventDefault();
+  if (window.top !== window && window.InterPhaceShell?.runtime?.session?.()) {
+    window.InterPhaceShell.runtime.requestStop();
+    auditionState = "idle";
+    notifyAuditionState();
+    return;
+  }
   if (auditionState !== "idle") {
     stopAudition();
     return;
@@ -854,6 +915,10 @@ function toggleAudition(event) {
     stopAudition();
   });
 }
+
+window.addEventListener("interPhace:runtime-stop", () => {
+  if (auditionState === "playing") { auditionState = "idle"; notifyAuditionState(); }
+});
 
 applyDefaults();
 loadState();
