@@ -11,10 +11,10 @@ Before any button page is opened, direct interPhace loads show the non-button st
 |---|---|---|---|
 | B1 | Project | `app1_b1_p1` — Project Name, Root, Scale, Tempo, Length, Swing, and Timing controls owned by interPhace | Live |
 | B2 | Mixer | `app1_b2_p1` — dynamic ARP/SYNTH, Kick, Snare, Hat, Noise, and Drone dB controls; ARP/SYNTH Playback and Drone/Noise Opposed Orbit; mute skips render work | Live / audition-wired |
-| B3 | Import | `app1_b3_p1` — Projects / Patches / MIDI / Kits selection grid | Live |
+| B3 | Import | `app1_b3_p1` — Projects / Patches / MIDI / Kits selection grid plus eight local Project Snapshot slots | Live |
 | B4 | Export | `app1_b4_p1` — Projects / Patches / MIDI / Audio selection grid and export actions | Live |
 | B5 | Child Phace Settings | Recycled settings pages for synthPhace, arpPhace, drumPhace, noisePhace, dronePhace | Live |
-| B6 | Phace | Opens the six-Phace selector / gateway | Live |
+| B6 | Phace | Opens the six-Phace selector / gateway; hold while in interPhace saves the complete local project into the next open Project Snapshot slot | Live |
 
 ## Agreed B2 extension
 

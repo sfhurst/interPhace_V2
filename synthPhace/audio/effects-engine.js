@@ -1001,16 +1001,24 @@ function makeSaturationCurve(drive, bias, asymmetry) {
   const d=Math.max(1,Number(drive)||1);
   const b=Number(bias)||0;
   const a=Math.max(0,Math.min(.95,Number(asymmetry)||0));
-
-  for(let i=0;i<size;i++){
-    const x=(i/(size-1))*2-1;
+  const shape = (x) => {
     const shifted=x+b;
     const positiveDrive=d*(1+a);
     const negativeDrive=d*(1-a);
     const shaped=shifted>=0
       ? Math.tanh(shifted*positiveDrive)/Math.max(.0001,Math.tanh(positiveDrive))
       : Math.tanh(shifted*negativeDrive)/Math.max(.0001,Math.tanh(negativeDrive));
-    curve[i]=Math.max(-1,Math.min(1,shaped-b*.35));
+    return shaped-b*.35;
+  };
+  // A WaveShaper processes silence too. Bias previously made curve[0] a
+  // large DC value (Fuzzed was about 0.69), so the following DC blocker turned
+  // the silence-to-note transition into a loud click. Center the curve at
+  // zero so every saturation preset maps digital silence to digital silence.
+  const zeroOutput=shape(0);
+
+  for(let i=0;i<size;i++){
+    const x=(i/(size-1))*2-1;
+    curve[i]=Math.max(-1,Math.min(1,shape(x)-zeroOutput));
   }
   return curve;
 }
@@ -1035,6 +1043,11 @@ function makeCharacterSaturationCurve(p) {
         const z=y+b;
         y=Math.tanh(z*(1.4+h*3)) + Math.sin(z*Math.PI)*h*.08;
         y-=b*.45;
+        // Tape bias has a non-zero transfer value at digital silence. Center
+        // it here so Tape Low and Tape Hot cannot excite the DC blocker at
+        // note start, while retaining their tape curve and hysteresis shape.
+        const zeroOutput=Math.tanh(b*(1.4+h*3)) + Math.sin(b*Math.PI)*h*.08 - b*.45;
+        y-=zeroOutput;
         break;
       }
       case 'tube': {
@@ -1098,7 +1111,10 @@ function applySaturation(ctx,input,index){
 
   for(let ch=0;ch<2;ch++){
     const driveGain=ctx.createGain();
-    driveGain.gain.value=p.mode ? 1 : p.drive;
+    // The saturation transfer functions already apply `drive`. Feeding the
+    // same value into a pre-gain applied it twice (drive²), which could slam
+    // the output limiter for the first few milliseconds of a note.
+    driveGain.gain.value=1;
 
     const shaper=ctx.createWaveShaper();
     shaper.curve=p.mode
@@ -1283,4 +1299,3 @@ EffectsEngine.bitCrushDefaultWet = function(index){
   return Math.round(Math.max(0,Math.min(1,Number(BIT_CRUSH_PRESETS[i]?.mix)||0))*100);
 };
 window.SynthPhaceEffects = EffectsEngine;
-

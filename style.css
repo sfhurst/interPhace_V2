@@ -1,5 +1,6 @@
 :root {
   --phace-synth: #00aaff;
+  --phace-pretty: #ff5aa9;
   --phace-kick: #ff4b4b;
   --phace-snare: #4ee26b;
   --phace-hat: #f1d74c;
@@ -893,8 +894,12 @@ select,
   background: var(--phace-synth) !important;
 }
 
-.synthEngineToggle input:checked + .toggleTrack::after {
+.synthEngineToggle input:not(:checked) + .toggleTrack::after {
   background: var(--phace-synth) !important;
+}
+
+.synthEngineToggle input:checked + .toggleTrack::after {
+  background: var(--phace-pretty) !important;
 }
 
 .drumBordersToggle input:checked + .toggleTrack::after {

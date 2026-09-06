@@ -43,13 +43,20 @@
     const frequency = midiToFrequency(patch.midiNote);
     if (patch.synth?.engine?.mode === "pretty") {
       if (!window.PrettyEngine?.build || !window.PrettyEnvelopeEngine?.apply) throw new Error("synthPhace Pretty engine is unavailable.");
-      const source = window.PrettyEngine.build(ctx, frequency, patch.synth?.pretty || {}, 2);
+      const drawn = patch.envelope?.prettyDrawn;
+      const drawnDuration = drawn?.active && drawn?.valid ? Math.max(.02, Math.min(20, Number(drawn.duration) || 2)) : 2;
+      const source = window.PrettyEngine.build(ctx, frequency, patch.synth?.pretty || {}, drawnDuration);
+      if (drawn?.active && drawn?.valid && window.DrawnEnvelopeEngine?.apply) {
+        const envelope = window.DrawnEnvelopeEngine.apply(ctx, source.node, drawn);
+        if (envelope) return { source, envelope };
+      }
       return { source, envelope: window.PrettyEnvelopeEngine.apply(ctx, source.node, patch.synth?.prettyEnvelope || {}, source.targets) };
     }
     if (!window.FMEngine?.build || !window.AmpEnvelopeEngine?.apply) throw new Error("synthPhace FM engine is unavailable.");
     const source = window.FMEngine.build(ctx, frequency, patch.synth?.fm || {}, envelopeLength(patch));
     const drawn = patch.envelope?.drawn;
     if (drawn?.active && drawn?.valid && window.DrawnEnvelopeEngine?.apply) {
+      window.AmpEnvelopeEngine.initializeCompanionGains?.(source.modulationTargets, ctx.currentTime);
       const envelope = window.DrawnEnvelopeEngine.apply(ctx, source.node, drawn);
       if (envelope) return { source, envelope };
     }
@@ -689,6 +696,8 @@
     dry = false,
     noHarmonies = false,
     noiseOnly = false,
+    transientOnly = false,
+    needleDropVariation = 0,
     effectsReleaseMs = 120,
   } = {}) {
     const adapter = window.SynthPhacePatchAdapter;
@@ -697,13 +706,22 @@
     const patch = JSON.parse(JSON.stringify(sourcePatch));
     patch.midiNote = Number.isFinite(Number(midiNote)) ? Number(midiNote) : sourcePatch.midiNote;
     patch.tempo = Math.max(30, Math.min(300, Number(tempo) || 75));
-    if (noHarmonies || noiseOnly) {
+    if (noHarmonies || noiseOnly || transientOnly) {
       if (patch.synth?.fm?.harmonic1) patch.synth.fm.harmonic1.gain = 0;
       if (patch.synth?.fm?.harmonic2) patch.synth.fm.harmonic2.gain = 0;
     }
-    if (noiseOnly) {
+    if (noiseOnly || transientOnly) {
       if (patch.synth?.fm) patch.synth.fm.carrierVolume = 0;
+      if (patch.synth?.pretty) patch.synth.pretty.level = 0;
+    }
+    if (noiseOnly) {
       if (patch.transient) patch.transient.volume = 0;
+    }
+    if (transientOnly) {
+      if (patch.texture) patch.texture.amount = 0;
+      if (patch.transient && Number(needleDropVariation) > 0) {
+        patch.transient.exportVariation = Math.max(1, Math.min(5, Math.round(Number(needleDropVariation))));
+      }
     }
     if (dry && patch.fx) {
       for (const value of Object.values(patch.fx)) {
@@ -723,6 +741,12 @@
     });
   }
 
+  function currentTransientPreset() {
+    const adapter = window.SynthPhacePatchAdapter;
+    adapter?.captureAndSave?.(window.SynthPhaceUIState || {});
+    return Math.round(Number(adapter?.getLegacyPatch?.()?.transient?.preset) || 0);
+  }
+
   window.SynthPhaceAuditionEngine = Object.freeze({
     play,
     stop,
@@ -731,6 +755,7 @@
     renderArpNote,
     renderArpPerformance,
     renderConstructionNote,
+    currentTransientPreset,
     getAuditionState: () => auditionState,
     isRendering: () => auditionState === "rendering",
     isPlaying: () => auditionState === "playing",

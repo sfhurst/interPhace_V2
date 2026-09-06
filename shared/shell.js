@@ -44,7 +44,7 @@ window.InterPhaceShell = (() => {
     dronePhace: 5,
   });
   const SNAPSHOT_STORAGE_KEY = "interPhace.phaceSnapshots.v1";
-  const SNAPSHOT_PHACES = Object.freeze(["synthPhace", "drumPhace", "arpPhace", "noisePhace", "dronePhace"]);
+  const SNAPSHOT_PHACES = Object.freeze(["interPhace", "synthPhace", "drumPhace", "arpPhace", "noisePhace", "dronePhace"]);
   const SNAPSHOT_SLOT_COUNT = 8;
 
   function cloneSnapshotValue(value) {

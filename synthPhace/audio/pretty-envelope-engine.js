@@ -7,7 +7,7 @@ window.PrettyEnvelopeEngine = (() => {
     const bodyDecay = .12 + normal(params.bodyDecay ?? 42) * 1.18;
     const overtoneDecay = .035 + normal(params.overtoneDecay ?? 25) * .62;
     const damp = normal(params.damp ?? 45);
-    const release = .015 + normal(params.release ?? 18) * .26;
+    const release = .015 + normal(params.release ?? 18) * .36;
     const noteLength = Math.min(2, Math.max(bodyDecay, overtoneDecay) + attack + release);
     const amp = ctx.createGain(); amp.gain.setValueAtTime(.0001, t0);
     amp.gain.exponentialRampToValueAtTime(1, t0 + attack);
@@ -18,8 +18,12 @@ window.PrettyEnvelopeEngine = (() => {
       gain.cancelScheduledValues(t0); gain.setValueAtTime(Math.max(.0001, base), t0);
       gain.linearRampToValueAtTime(Math.max(.0001, base * floor), t0 + attack + decay);
     };
-    schedule(targets.bodyGain, targets.bodyBase || 1, bodyDecay, .10 + damp * .30);
-    schedule(targets.overtoneGain, targets.overtoneBase || 1, overtoneDecay, .015 + damp * .13);
+    schedule(targets.dryBodyGain, targets.bodyBase || 1, bodyDecay, .10 + damp * .30);
+    schedule(targets.dryOvertoneGain, targets.overtoneBase || 1, overtoneDecay, .015 + damp * .13);
+    schedule(targets.wetBodyGain, targets.bodyBase || 1, bodyDecay, .10 + damp * .30);
+    schedule(targets.wetOvertoneGain, targets.overtoneBase || 1, overtoneDecay, .015 + damp * .13);
+    schedule(targets.toneGain, targets.toneBase || 0, overtoneDecay, .015 + damp * .13);
+    schedule(targets.chimeGain, targets.chimeBase || 0, Math.max(.018, overtoneDecay * .55), .004 + damp * .05);
     return { node: amp, noteLength };
   }
   return Object.freeze({ apply });

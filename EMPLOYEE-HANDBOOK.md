@@ -41,6 +41,8 @@
 - All Phace sliders use the same shared control geometry/layout. Their accent color may follow the active Phace/instrument context.
 - Slider tracks use the same light visual weight as the standard step-grid outline: 1px. Keep the slider thumb large enough for touch use.
 - **Slider reset standard:** double-clicking a slider returns it to its declared default value. interPhace Mixer sliders are the exception: their existing double-click mute/unmute behavior remains authoritative.
+- **Generate / preset standard:** page Generate randomizes direct sound controls only. Preset sliders are excluded by default because they are grouped starting points, not randomization targets. A preset slider may be included only through an explicit, documented per-control exception. Current exceptions: synthPhace B1 P3 Noise Source and Transient Source, plus the eight synthPhace B2 P1 single-slider Effect controls, are direct source/effect selections and are Generate targets.
+- **Generate audibility and safety guard:** exclude a direct control only when randomizing it can silence, substantially hide the entire generated page, or create unsafe/extreme output. Current approved exclusions are synthPhace FM B1 P1 Carrier Volume; synthPhace Pretty B1 P1 Pretty Volume; synthPhace Pretty B1 P2 Blend; synthPhace B4 P1 Time Multiplier; noisePhace B1 Amount; and noisePhace B2 Amount. Other volume, wet, and layer-mix controls remain Generate targets unless explicitly approved otherwise.
 - Do not invent a Phace-specific control style when an official template already exists.
 - **Background Selection Grid standard:** use the shared `backgroundSelectionGrid` toolbox control for page-alignment/selection scaffolds. It matches drumPhace B1 geometry (16 rows; 4 columns on phone, 8 on larger screens; same label track and gaps), keeps unused cells invisible/inert, reveals only explicitly activated cells, and uses uniform 1px cell borders with no heavier musical row dividers.
 - **Background grid placement is intentional per page:** fixed-row controls stay at their designed rows; predictive-row controls keep their assigned columns but move vertically to the first safe row below foreground controls. Do not make every grid control predictive by default. Current predictive example: synthPhace EQ range buttons. Current fixed examples: Import/Export and iP B5 snapshot buttons.
@@ -64,6 +66,7 @@
    - Save into the next open snapshot slot on that Phace's interPhace B5 page.
    - Tapping a populated snapshot restores it; holding it clears it and compacts later snapshots forward.
    - Snapshots are local-only: New Project, import, export, and patch files do not affect them.
+   - interPhace B3 Import also has eight local-only full-project snapshot slots. While in interPhace, B6 hold saves every project/Phace state into the next open slot; tap restores and reloads; hold clears and compacts slots.
 2. **Contextual Return to interPhace — implemented in Build 491**
    - Navigating from a Phace to interPhace through the shared Phace selector or PageUp/PageDown navigation opens B5 on that Phace's settings page.
    - Direct interPhace loads continue to restore the previously saved interPhace page.
@@ -143,6 +146,7 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 ### Build ZIP packaging and localhost development
 - Development localhost serves the permanent working folder `C:\Users\hurst.audio\Dev\interPhace_main\current\`.
 - Every delivered interPhace build ZIP must be flat at the project-root level: opening the ZIP shows `index.html`, project JavaScript/CSS, Phace folders, documentation, `favicon.ico`, and other project-root files directly.
+- The canonical delivered filename is `interPhace-build-<integer>-<Short-Hyphenated-Description>.zip` (for example, `interPhace-build-520-Drawn-Envelope-Return-Fix.zip`). Download/upload duplicate markers such as `(1)` are not part of a build name.
 - Never wrap a delivered build inside an additional `interPhace-build-XX` folder or other parent directory.
 - The ZIP must be suitable for extracting directly into the permanent `current` folder and overwriting its contents while localhost remains running.
 - Build/version names belong in the ZIP filename and documentation, not as an extra directory inside the archive.

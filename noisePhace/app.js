@@ -224,8 +224,11 @@ function generateCurrentPage() {
   if (!page) return;
 
   // Match dronePhace: randomize only direct sound controls on the visible page.
-  // Preset sliders are excluded because they drive groups of other sliders.
+  // Preset sliders stay excluded. B1/B2 Amount are the explicit audibility
+  // guards: randomizing them can make their whole generated page inaudible.
+  const audibilityGuards = new Set(["app5_b1_p1_c5", "app5_b2_p1_c5"]);
   page.querySelectorAll(".macroSlider").forEach(slider => {
+    if (audibilityGuards.has(slider.id)) return;
     const min = Number(slider.min || 0);
     const max = Number(slider.max || 100);
     const step = Number(slider.step || 1);

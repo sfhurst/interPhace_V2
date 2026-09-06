@@ -5,28 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0c0d0f" />
     <title>interPhace - synthPhace</title>
-    <link rel="stylesheet" href="style.css?v=519" />
+  <link rel="stylesheet" href="style.css?v=527" />
     <link rel="stylesheet" href="../shared/shell.css?v=508" />
-    <script src="../shared/shell.js?v=499" defer></script>
+    <script src="../shared/shell.js?v=552" defer></script>
     <script src="control-data.js" defer></script>
-    <script src="patch-adapter.js?v=519" defer></script>
-    <script src="app.js?v=520" defer></script>
+    <script src="patch-adapter.js?v=550" defer></script>
+    <script src="audio/pitch-presets.js?v=528" defer></script>
+    <script src="app.js?v=551" defer></script>
     <script src="audio/audio-math.js" defer></script>
     <script src="audio/personality/personality-authoring.js" defer></script>
     <script src="audio/personality/instrument-behaviors.js" defer></script>
     <script src="audio/personality/character-personalities.js" defer></script>
     <script src="audio/fm-engine.js" defer></script>
-    <script src="audio/pretty-engine.js?v=516" defer></script>
-    <script src="audio/pretty-envelope-engine.js?v=516" defer></script>
-    <script src="audio/carrier-envelope-engine.js" defer></script>
-    <script src="audio/drawn-envelope-engine.js?v=516" defer></script>
-    <script src="audio/pitch-presets.js" defer></script>
+    <script src="audio/pretty-engine.js?v=549" defer></script>
+    <script src="audio/pretty-envelope-engine.js?v=543" defer></script>
+    <script src="audio/carrier-envelope-engine.js?v=535" defer></script>
+    <script src="audio/drawn-envelope-engine.js?v=521" defer></script>
     <script src="audio/texture-engine.js" defer></script>
-    <script src="audio/transient-source-engine.js" defer></script>
+    <script src="audio/transient-source-engine.js?v=534" defer></script>
     <script src="audio/filter-frequencies.js" defer></script>
     <script src="audio/filter-engine.js" defer></script>
-    <script src="audio/effects-engine.js" defer></script>
-    <script src="audio/audition-engine.js?v=516" defer></script>
+    <script src="audio/effects-engine.js?v=533" defer></script>
+    <script src="audio/audition-engine.js?v=535" defer></script>
     <link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="../favicon.ico" type="image/x-icon">
 </head>
   <body id="app2">
@@ -54,7 +54,8 @@
             <label class="macroControl"><span class="macroLabel">Body</span><input class="macroSlider" id="app2_b1_p1_pretty_body" type="range" min="0" max="100" value="60" data-name="prettyBody" step="1" /><span id="app2_b1_p1_pretty_body_value" class="macroValue">60%</span></label>
             <label class="macroControl"><span class="macroLabel">Harmonics</span><input class="macroSlider" id="app2_b1_p1_pretty_harmonics" type="range" min="0" max="100" value="28" data-name="prettyHarmonics" step="1" /><span id="app2_b1_p1_pretty_harmonics_value" class="macroValue">28%</span></label>
             <label class="macroControl"><span class="macroLabel">Spread</span><input class="macroSlider" id="app2_b1_p1_pretty_spread" type="range" min="0" max="100" value="0" data-name="prettySpread" step="1" /><span id="app2_b1_p1_pretty_spread_value" class="macroValue">0%</span></label>
-            <label class="macroControl"><span class="macroLabel">Level</span><input class="macroSlider" id="app2_b1_p1_pretty_level" type="range" min="0" max="100" value="78" data-name="prettyLevel" step="1" /><span id="app2_b1_p1_pretty_level_value" class="macroValue">78%</span></label>
+            <label class="macroControl"><span class="macroLabel">Pretty Volume</span><input class="macroSlider" id="app2_b1_p1_pretty_volume" type="range" min="0" max="100" value="80" data-name="prettyVolume" step="1" /><span id="app2_b1_p1_pretty_volume_value" class="macroValue">80%</span></label>
+            <label class="macroControl"><span class="macroLabel">Voice Preset</span><input class="macroSlider" id="app2_b1_p1_pretty_voicePreset" type="range" min="0" max="3" value="0" data-name="prettyVoicePreset" step="1" /><span id="app2_b1_p1_pretty_voicePreset_value" class="macroValue">Round</span></label>
           </div></div></section>
 
         <section id="app2_b1_p2" class="synth-page drum-synth-stage hidden" data-page-key="fm" aria-label="FM"><div class="drum-synth-panel">
@@ -74,13 +75,12 @@
         <section id="app2_b1_p2_pretty" class="synth-page drum-synth-stage hidden" data-page-key="pretty" aria-label="Pretty"><div class="drum-synth-panel">
           <div id="app2_b1_p2_pretty_title" class="page-title drum-synth-title">pretty tone</div>
           <div class="control-stack drum-synth-controls">
-            <label class="macroControl"><span class="macroLabel">Strike</span><input class="macroSlider" id="app2_b1_p2_pretty_strike" type="range" min="0" max="100" value="12" data-name="prettyStrike" step="1" /><span id="app2_b1_p2_pretty_strike_value" class="macroValue">12%</span></label>
             <label class="macroControl"><span class="macroLabel">Hollow</span><input class="macroSlider" id="app2_b1_p2_pretty_bloom" type="range" min="0" max="100" value="45" data-name="prettyBloom" step="1" /><span id="app2_b1_p2_pretty_bloom_value" class="macroValue">45%</span></label>
             <label class="macroControl"><span class="macroLabel">Chime</span><input class="macroSlider" id="app2_b1_p2_pretty_damp" type="range" min="0" max="100" value="35" data-name="prettyDamp" step="1" /><span id="app2_b1_p2_pretty_damp_value" class="macroValue">35%</span></label>
             <label class="macroControl"><span class="macroLabel">Tone</span><input class="macroSlider" id="app2_b1_p2_pretty_color" type="range" min="0" max="100" value="14" data-name="prettyColor" step="1" /><span id="app2_b1_p2_pretty_color_value" class="macroValue">14%</span></label>
-            <label class="macroControl"><span class="macroLabel">Companion Drift</span><input class="macroSlider" id="app2_b1_p2_pretty_resonance" type="range" min="0" max="100" value="14" data-name="prettyResonance" step="1" /><span id="app2_b1_p2_pretty_resonance_value" class="macroValue">14%</span></label>
+            <label class="macroControl"><span class="macroLabel">Tremolo</span><input class="macroSlider" id="app2_b1_p2_pretty_resonance" type="range" min="0" max="100" value="0" data-name="prettyResonance" step="1" /><span id="app2_b1_p2_pretty_resonance_value" class="macroValue">0%</span></label>
             <label class="macroControl"><span class="macroLabel">Blend</span><input class="macroSlider" id="app2_b1_p2_pretty_blend" type="range" min="0" max="100" value="55" data-name="prettyBlend" step="1" /><span id="app2_b1_p2_pretty_blend_value" class="macroValue">55%</span></label>
-            <label class="macroControl"><span class="macroLabel">Pretty Preset</span><input class="macroSlider" id="app2_b1_p2_pretty_preset" type="range" min="0" max="3" value="0" data-name="prettyPreset" step="1" /><span id="app2_b1_p2_pretty_preset_value" class="macroValue">Still</span></label>
+            <label class="macroControl"><span class="macroLabel">Tone Preset</span><input class="macroSlider" id="app2_b1_p2_pretty_preset" type="range" min="0" max="3" value="0" data-name="prettyPreset" step="1" /><span id="app2_b1_p2_pretty_preset_value" class="macroValue">Still</span></label>
           </div>
         </div></section>
 
@@ -91,6 +91,7 @@
             <label class="macroControl"><span class="macroLabel">Overtone Decay</span><input class="macroSlider" id="app2_b4_p1_pretty_overtoneDecay" type="range" min="0" max="100" value="25" data-name="prettyOvertoneDecay" step="1" /><span id="app2_b4_p1_pretty_overtoneDecay_value" class="macroValue">25%</span></label>
             <label class="macroControl"><span class="macroLabel">Damp</span><input class="macroSlider" id="app2_b4_p1_pretty_damp" type="range" min="0" max="100" value="45" data-name="prettyEnvelopeDamp" step="1" /><span id="app2_b4_p1_pretty_damp_value" class="macroValue">45%</span></label>
             <label class="macroControl"><span class="macroLabel">Release</span><input class="macroSlider" id="app2_b4_p1_pretty_release" type="range" min="0" max="100" value="18" data-name="prettyRelease" step="1" /><span id="app2_b4_p1_pretty_release_value" class="macroValue">18%</span></label>
+            <label class="macroControl"><span class="macroLabel">Envelope Preset</span><input class="macroSlider" id="app2_b4_p1_pretty_preset" type="range" min="0" max="3" value="2" data-name="prettyEnvelopePreset" step="1" /><span id="app2_b4_p1_pretty_preset_value" class="macroValue">Piano</span></label>
           </div></div></section>
 
         <section id="app2_b4_p2" class="synth-page drum-synth-stage hidden" data-page-key="behavior" aria-label="Instrument behavior and character"><div class="drum-synth-panel">
@@ -103,22 +104,22 @@
 
         <section id="app2_b1_p3" class="synth-page drum-synth-stage hidden" data-page-key="texture" aria-label="Texture and transient"><div class="drum-synth-panel">
           <div id="app2_b1_p3_title" class="page-title drum-synth-title">texture / transient</div><div class="control-stack drum-synth-controls">
-            <label class="macroControl"><span class="macroLabel">Noise Source</span><input class="macroSlider" id="app2_b1_p4_texturePreset" type="range" min="0" max="7" value="0" data-name="texturePreset" step="1" /><span id="app2_b1_p4_texturePreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Noise Source</span><input class="macroSlider" id="app2_b1_p4_texturePreset" type="range" min="0" max="7" value="0" data-name="texturePreset" data-generate-include="true" step="1" /><span id="app2_b1_p4_texturePreset_value" class="macroValue">Off</span></label>
             <label class="macroControl"><span class="macroLabel">Noise Volume</span><input class="macroSlider" id="app2_b1_p4_textureAmount" type="range" min="0" max="100" value="0" data-name="textureAmount" step="1" /><span id="app2_b1_p4_textureAmount_value" class="macroValue">0%</span></label>
-            <label class="macroControl"><span class="macroLabel">Transient Source</span><input class="macroSlider" id="app2_b1_p4_transientPreset" type="range" min="0" max="7" value="0" data-name="transientPreset" step="1" /><span id="app2_b1_p4_transientPreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Transient Source</span><input class="macroSlider" id="app2_b1_p4_transientPreset" type="range" min="0" max="8" value="0" data-name="transientPreset" data-generate-include="true" step="1" /><span id="app2_b1_p4_transientPreset_value" class="macroValue">Off</span></label>
             <label class="macroControl"><span class="macroLabel">Transient Volume</span><input class="macroSlider" id="app2_b1_p4_transientVolume" type="range" min="0" max="100" value="35" data-name="transientVolume" step="1" /><span id="app2_b1_p4_transientVolume_value" class="macroValue">35%</span></label>
           </div></div></section>
 
-        <section id="app2_b2_p1" class="synth-page drum-synth-stage hidden" data-page-key="effects-presets" aria-label="Effects Presets"><div class="drum-synth-panel"><div id="app2_b2_p1_title" class="page-title drum-synth-title">effects presets</div><div class="control-stack drum-synth-controls">
+        <section id="app2_b2_p1" class="synth-page drum-synth-stage hidden" data-page-key="effects" aria-label="Effects"><div class="drum-synth-panel"><div id="app2_b2_p1_title" class="page-title drum-synth-title">effects</div><div class="control-stack drum-synth-controls">
           
-            <label class="macroControl"><span class="macroLabel">Bit Crush</span><input class="macroSlider" id="app2_b2_p1_bitCrushPreset" type="range" min="0" max="20" value="0" data-name="bitCrushPreset" step="1" /><span id="app2_b2_p1_bitCrushPreset_value" class="macroValue">Off</span></label>
-            <label class="macroControl"><span class="macroLabel">Saturation</span><input class="macroSlider" id="app2_b2_p2_saturationPreset" type="range" min="0" max="29" value="0" data-name="saturationPreset" step="1" /><span id="app2_b2_p2_saturationPreset_value" class="macroValue">Off</span></label>
-            <label class="macroControl"><span class="macroLabel">Width</span><input class="macroSlider" id="app2_b2_p3_widthPreset" type="range" min="0" max="18" value="0" data-name="widthPreset" step="1" /><span id="app2_b2_p3_widthPreset_value" class="macroValue">Off</span></label>
-            <label class="macroControl"><span class="macroLabel">Detune</span><input class="macroSlider" id="app2_b2_p4_detunePreset" type="range" min="0" max="24" value="0" data-name="detunePreset" step="1" /><span id="app2_b2_p4_detunePreset_value" class="macroValue">Off</span></label>
-            <label class="macroControl"><span class="macroLabel">Chorus</span><input class="macroSlider" id="app2_b2_p5_chorusPreset" type="range" min="0" max="27" value="0" data-name="chorusPreset" step="1" /><span id="app2_b2_p5_chorusPreset_value" class="macroValue">Off</span></label>
-            <label class="macroControl"><span class="macroLabel">Delay</span><input class="macroSlider" id="app2_b2_p6_delayPreset" type="range" min="0" max="41" value="0" data-name="delayPreset" step="1" /><span id="app2_b2_p6_delayPreset_value" class="macroValue">Off</span></label>
-            <label class="macroControl"><span class="macroLabel">Reverb</span><input class="macroSlider" id="app2_b2_p7_reverbPreset" type="range" min="0" max="31" value="0" data-name="reverbPreset" step="1" /><span id="app2_b2_p7_reverbPreset_value" class="macroValue">Off</span></label>
-            <label class="macroControl"><span class="macroLabel">Convolution</span><input class="macroSlider" id="app2_b2_p1_convolutionPreset" type="range" min="0" max="28" value="0" data-name="convolutionPreset" step="1" /><span id="app2_b2_p1_convolutionPreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Bit Crush</span><input class="macroSlider" id="app2_b2_p1_bitCrushPreset" type="range" min="0" max="20" value="0" data-name="bitCrushPreset" data-generate-include="true" step="1" /><span id="app2_b2_p1_bitCrushPreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Saturation</span><input class="macroSlider" id="app2_b2_p2_saturationPreset" type="range" min="0" max="29" value="0" data-name="saturationPreset" data-generate-include="true" step="1" /><span id="app2_b2_p2_saturationPreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Width</span><input class="macroSlider" id="app2_b2_p3_widthPreset" type="range" min="0" max="18" value="0" data-name="widthPreset" data-generate-include="true" step="1" /><span id="app2_b2_p3_widthPreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Detune</span><input class="macroSlider" id="app2_b2_p4_detunePreset" type="range" min="0" max="24" value="0" data-name="detunePreset" data-generate-include="true" step="1" /><span id="app2_b2_p4_detunePreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Chorus</span><input class="macroSlider" id="app2_b2_p5_chorusPreset" type="range" min="0" max="27" value="0" data-name="chorusPreset" data-generate-include="true" step="1" /><span id="app2_b2_p5_chorusPreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Delay</span><input class="macroSlider" id="app2_b2_p6_delayPreset" type="range" min="0" max="41" value="0" data-name="delayPreset" data-generate-include="true" step="1" /><span id="app2_b2_p6_delayPreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Reverb</span><input class="macroSlider" id="app2_b2_p7_reverbPreset" type="range" min="0" max="31" value="0" data-name="reverbPreset" data-generate-include="true" step="1" /><span id="app2_b2_p7_reverbPreset_value" class="macroValue">Off</span></label>
+            <label class="macroControl"><span class="macroLabel">Convolution</span><input class="macroSlider" id="app2_b2_p1_convolutionPreset" type="range" min="0" max="28" value="0" data-name="convolutionPreset" data-generate-include="true" step="1" /><span id="app2_b2_p1_convolutionPreset_value" class="macroValue">Off</span></label>
         </div></div></section>
 <section id="app2_b2_p2" class="synth-page drum-synth-stage hidden" data-page-key="effects-amount" aria-label="Effects Amount"><div class="drum-synth-panel"><div id="app2_b2_p2_title" class="page-title drum-synth-title">effects amount</div><div class="control-stack drum-synth-controls">
           
@@ -197,10 +198,26 @@
           <div class="synth-drawn-envelope-content drum-synth-panel">
             <div class="page-title drum-synth-title">drawn envelope</div>
             <div class="control-stack drum-synth-controls">
-            <label class="macroControl"><span class="macroLabel">Length</span><input class="macroSlider" id="app2_b4_p3_length" type="range" min="0.02" max="20" value="2" data-name="drawnEnvelopeLength" step="0.02" /><span id="app2_b4_p3_length_value" class="macroValue">2s</span></label>
+            <label class="macroControl"><span class="macroLabel">Length</span><input class="macroSlider" id="app2_b4_p3_length" type="range" min="0.02" max="20" value="2" data-name="drawnEnvelopeLength" step="0.02" /><span id="app2_b4_p3_length_value" class="macroValue">2.000s</span></label>
             <label class="macroControl"><span class="macroLabel">Smoothing</span><input class="macroSlider" id="app2_b4_p3_smoothing" type="range" min="0" max="100" value="100" data-name="drawnEnvelopeSmoothing" step="1" /><span id="app2_b4_p3_smoothing_value" class="macroValue">100%</span></label>
               <div id="app2_b4_p3_drawArea" class="drawn-envelope-area" aria-label="Draw an amplitude envelope from start to end">
                 <canvas id="app2_b4_p3_canvas" class="drawn-envelope-canvas"></canvas>
+                <span class="drawn-envelope-anchor drawn-envelope-start" aria-hidden="true"></span>
+                <span class="drawn-envelope-anchor drawn-envelope-end" aria-hidden="true"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="app2_b4_p2_pretty" class="synth-page drum-synth-stage synth-drawn-envelope-page hidden" data-page-key="pretty-drawn-envelope" aria-label="Pretty drawn envelope">
+          <div id="app2_b4_p2_pretty_grid" class="backgroundSelectionGrid synthDrawnEnvelopeGrid" aria-hidden="true"></div>
+          <div class="synth-drawn-envelope-content drum-synth-panel">
+            <div class="page-title drum-synth-title">drawn envelope</div>
+            <div class="control-stack drum-synth-controls">
+            <label class="macroControl"><span class="macroLabel">Length</span><input class="macroSlider" id="app2_b4_p2_pretty_length" type="range" min="0.02" max="20" value="2" data-name="prettyDrawnEnvelopeLength" step="0.02" /><span id="app2_b4_p2_pretty_length_value" class="macroValue">2.000s</span></label>
+            <label class="macroControl"><span class="macroLabel">Smoothing</span><input class="macroSlider" id="app2_b4_p2_pretty_smoothing" type="range" min="0" max="100" value="100" data-name="prettyDrawnEnvelopeSmoothing" step="1" /><span id="app2_b4_p2_pretty_smoothing_value" class="macroValue">100%</span></label>
+              <div id="app2_b4_p2_pretty_drawArea" class="drawn-envelope-area" aria-label="Draw a Pretty amplitude envelope from start to end">
+                <canvas id="app2_b4_p2_pretty_canvas" class="drawn-envelope-canvas"></canvas>
                 <span class="drawn-envelope-anchor drawn-envelope-start" aria-hidden="true"></span>
                 <span class="drawn-envelope-anchor drawn-envelope-end" aria-hidden="true"></span>
               </div>

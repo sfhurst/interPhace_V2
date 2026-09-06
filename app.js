@@ -186,6 +186,8 @@ document.addEventListener("DOMContentLoaded", () => {
     muted: "#858b94",
     getAuditionState: () => globalAuditionState,
     auditionDisabled: false,
+    canSnapshot: () => window.InterPhaceShell?.snapshots?.hasOpenSlot("interPhace"),
+    onSnapshot: () => saveProjectSnapshot(),
   });
 
   function save() {
@@ -1239,7 +1241,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderInterSequencerEntryChooser(cell);
   }
 
-  function renderInterSequencerEntryChooser(anchorButton) {
+  function renderInterSequencerEntryChooser(anchorButton, preserveMelodyChoice = false) {
     closeInterSequencerChooser();
     if (!anchorButton) return;
 
@@ -1252,7 +1254,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     interSequencerChooserAnchor = anchorButton;
     const current = parseSequencerCell(state.sequencer[row][col], col);
-    if (col === 0 && current?.melody) interSequencerMelodyChoice = current.melody;
+    if (col === 0 && current?.melody && !preserveMelodyChoice) interSequencerMelodyChoice = current.melody;
 
     const chooser = document.createElement("div");
     chooser.className = "sequencerEntryChooser";
@@ -1292,7 +1294,7 @@ document.addEventListener("DOMContentLoaded", () => {
         button.addEventListener("click", event => {
           event.stopPropagation();
           interSequencerMelodyChoice = item.value;
-          renderInterSequencerEntryChooser(anchorButton);
+          renderInterSequencerEntryChooser(anchorButton, true);
         });
       } else {
         button.addEventListener("click", event => {
@@ -1668,6 +1670,7 @@ document.addEventListener("DOMContentLoaded", () => {
       importButtons[0]?.addEventListener("click", () => openProjectImportPicker());
       importButtons[1]?.addEventListener("click", () => openPatchImportPicker());
       // MIDI import remains intentionally unwired until its import contract is built.
+      populateSnapshotGrid(container, grid, pagePrefix);
     } else {
       const exportHeaders = ["PROJECT", "PATCHES", "MIDI", "AUDIO"].map((label, col) =>
         activate(2, col, label, "utilityHeader"));
@@ -2745,7 +2748,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (selected.has("synth")) {
       const root = Math.round(Number(state.project.root) || 60);
-      total += 4; // root dry, root wet, no-harmonies, isolated noise
+      total += 5; // root dry, root wet, no-harmonies, isolated noise, isolated transient
       total += constructionScaleNotes(root, state.project.scale).length * 2;
     }
 
@@ -2845,6 +2848,19 @@ document.addEventListener("DOMContentLoaded", () => {
       report("Synth isolated noise");
       const noise=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,noiseOnly:true,effectsReleaseMs:state.child.synthEffectsRelease});
       add(`synth-noise-isolated.wav`,noise.buffer,"Synth isolated noise");
+      const transientPreset = synthAPI.currentTransientPreset?.() ?? 0;
+      if (transientPreset === 7) {
+        for (let variation = 1; variation <= 5; variation++) {
+          const label = `Synth isolated Needle Drop variation ${variation}`;
+          report(label);
+          const transient = await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,transientOnly:true,needleDropVariation:variation,effectsReleaseMs:state.child.synthEffectsRelease});
+          add(`synth-transient-needle-drop-variation-${variation}.wav`,transient.buffer,label);
+        }
+      } else {
+        report("Synth isolated transient");
+        const transient=await synthAPI.renderConstructionNote({midiNote:root,gateSeconds:gate,tempo,transientOnly:true,effectsReleaseMs:state.child.synthEffectsRelease});
+        add(`synth-transient-isolated.wav`,transient.buffer,"Synth isolated transient");
+      }
       for(const note of constructionScaleNotes(root,state.project.scale)) for(const dry of [true,false]) {
         const label = `Synth ${midiNoteName(note)} ${dry ? "dry" : "wet"}`;
         report(label);
@@ -3735,10 +3751,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function buildSnapshotGrid(container, pagePrefix) {
-    if (!container) return;
-    const grid = buildBackgroundSelectionGrid(container, pagePrefix);
-    if (!grid) return;
+  function populateSnapshotGrid(container, grid, pagePrefix) {
+    if (!container || !grid) return;
 
     const label = document.createElement("span");
     label.className = "backgroundSelectionGridLabel snapshotGridLabel";
@@ -3757,7 +3771,22 @@ document.addEventListener("DOMContentLoaded", () => {
     renderSnapshotGrid(pagePrefix);
   }
 
-  const SNAPSHOT_PHACE_BY_PAGE = Object.freeze({ app1_b5_p1: "synthPhace", app1_b5_p2: "drumPhace", app1_b5_p3: "arpPhace", app1_b5_p4: "noisePhace", app1_b5_p5: "dronePhace" });
+  function buildSnapshotGrid(container, pagePrefix) {
+    if (!container) return;
+    const grid = buildBackgroundSelectionGrid(container, pagePrefix);
+    populateSnapshotGrid(container, grid, pagePrefix);
+  }
+
+  const SNAPSHOT_PHACE_BY_PAGE = Object.freeze({ app1_b3_p1: "interPhace", app1_b5_p1: "synthPhace", app1_b5_p2: "drumPhace", app1_b5_p3: "arpPhace", app1_b5_p4: "noisePhace", app1_b5_p5: "dronePhace" });
+  const PROJECT_SNAPSHOT_KEYS = Object.freeze([
+    STORAGE_KEY,
+    "interPhace.synthPhace.ui.v3",
+    "interPhace.synthPhace.patch.v1",
+    "drumPhace.build5.state",
+    "interPhace.arpPhace.template.v1",
+    "interPhace.noisePhace.ui.v2",
+    "interPhace.dronePhace.ui.v2",
+  ]);
   const SNAPSHOT_HOLD_MS = 900;
   const SNAPSHOT_FILL_DELAY_MS = 200;
   let snapshotSuppressClickUntil = 0;
@@ -3786,6 +3815,27 @@ document.addEventListener("DOMContentLoaded", () => {
     write({ drumPhace: "drumPhace.build5.state", arpPhace: "interPhace.arpPhace.template.v1", noisePhace: "interPhace.noisePhace.ui.v2", dronePhace: "interPhace.dronePhace.ui.v2" }[phace], snapshotState.state);
   }
 
+  function captureProjectSnapshot() {
+    save();
+    return Object.fromEntries(PROJECT_SNAPSHOT_KEYS.map((key) => [key, cloneJson(readStoredJson(key))]));
+  }
+
+  function saveProjectSnapshot() {
+    const saved = window.InterPhaceShell?.snapshots?.save?.("interPhace", captureProjectSnapshot());
+    if (saved) renderSnapshotGrids();
+    return !!saved;
+  }
+
+  function restoreProjectSnapshot(snapshotState) {
+    if (!snapshotState || typeof snapshotState !== "object") return;
+    PROJECT_SNAPSHOT_KEYS.forEach((key) => {
+      const value = snapshotState[key];
+      if (value && typeof value === "object") localStorage.setItem(key, JSON.stringify(cloneJson(value)));
+      else localStorage.removeItem(key);
+    });
+    window.location.reload();
+  }
+
   function attachSnapshotActions(cell, pagePrefix, index) {
     let timer = null, frame = 0, startedAt = 0, holding = false, fired = false;
     const setFill = percent => cell.style.setProperty("--snapshot-clear-fill", `${Math.max(0, Math.min(100, percent))}%`);
@@ -3807,7 +3857,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (performance.now() < snapshotSuppressClickUntil) return;
       const phace = SNAPSHOT_PHACE_BY_PAGE[pagePrefix];
       const snapshotState = window.InterPhaceShell?.snapshots?.restore?.(phace, index);
-      if (snapshotState) restorePhaceSnapshot(phace, snapshotState);
+      if (snapshotState) {
+        if (phace === "interPhace") restoreProjectSnapshot(snapshotState);
+        else restorePhaceSnapshot(phace, snapshotState);
+      }
     });
   }
 

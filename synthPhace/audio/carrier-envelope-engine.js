@@ -345,6 +345,18 @@ function applyCompanionBehavior(companions, behavior, startTime, duration, timel
   });
 }
 
+// FMEngine starts companion voices muted. Every envelope path must establish
+// their requested B1 P1 levels before audio begins.
+AmpEnvelopeEngine.initializeCompanionGains = function (modulationTargets = {}, startTime = 0) {
+  if (!Array.isArray(modulationTargets.companions)) return;
+  modulationTargets.companions.forEach(companion => {
+    if (!companion?.gain) return;
+    const baseGain = Math.max(0, finite(companion.baseGain));
+    companion.gain.cancelScheduledValues(startTime);
+    companion.gain.setValueAtTime(baseGain, startTime);
+  });
+};
+
 AmpEnvelopeEngine.apply = function (ctx, inputNode, envParams, modulationTargets = {}) {
   const timeline = timelineFor(envParams);
   const noteLength = Math.max(0.02, timeline.total);
@@ -364,14 +376,7 @@ AmpEnvelopeEngine.apply = function (ctx, inputNode, envParams, modulationTargets
   // Harmony companions are core synth voices, not personality effects.
   // Their requested base gains must be audible even when Behavior and Character
   // are both Off. Personality processing may modulate those base gains later.
-  if (Array.isArray(modulationTargets.companions)) {
-    modulationTargets.companions.forEach(companion => {
-      if (!companion?.gain) return;
-      const baseGain = Math.max(0, finite(companion.baseGain));
-      companion.gain.cancelScheduledValues(startTime);
-      companion.gain.setValueAtTime(baseGain, startTime);
-    });
-  }
+  AmpEnvelopeEngine.initializeCompanionGains(modulationTargets, startTime);
 
   // A real reference state: with both personality selectors Off, the AHDHD
   // envelope goes straight through with no personality gain/filter/LFO nodes.

@@ -17,6 +17,7 @@ const TRANSIENT_SOURCE_PRESETS = Object.freeze([
   { name: "Breath / Air", key: "breath", duration: 0.220 },
   { name: "Mallet / Strike", key: "mallet", duration: 0.150 },
   { name: "Needle Drop", key: "needleDrop", duration: 0.666 },
+  { name: "Quiet Needle", key: "saturationPop", duration: 0.032, followEnvelope: false },
 ]);
 
 function clamp(value, min, max) {
@@ -398,6 +399,32 @@ function addNeedleDropClicks(ctx, out, startTime, volume, seed) {
   }
 }
 
+function addSaturationPop(ctx, out, startTime, volume) {
+  // Intentional test transient: this recreates the former saturation/DC-blocker
+  // onset as a short source, without retaining that fault in Saturation itself.
+  const step = ctx.createConstantSource();
+  const dcBlock = ctx.createBiquadFilter();
+  const lowpass = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  const end = startTime + 0.032;
+
+  step.offset.value = 0.69;
+  dcBlock.type = "highpass";
+  dcBlock.frequency.value = 12;
+  dcBlock.Q.value = 0.5;
+  lowpass.type = "lowpass";
+  lowpass.frequency.value = 11000;
+  lowpass.Q.value = 0.5;
+  // 50% now matches Build 532's full-scale audition level; the upper half
+  // is available when the source needs to sit louder in a mix.
+  gain.gain.setValueAtTime(Math.max(0.0001, volume * 1.44), startTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+  step.connect(dcBlock).connect(lowpass).connect(gain).connect(out);
+  step.start(startTime);
+  step.stop(end + 0.002);
+}
+
 
 function addChosenRepeatingClick(ctx, out, startTime, volume, seed, variant) {
   const local = variant - 20;           // 1..20
@@ -474,15 +501,21 @@ function spawn(ctx, presetValue, volumeValue, midiNote, offsetSeconds = 0) {
       // Render the accepted Dust + Click 33 composite and replay it -3 semitones.
       // Playback rate changes pitch and speed together, like pitching a sample.
       const shiftRate = Math.pow(2, -3 / 12);
-      const renderDuration = 0.560;
+      // Construction export may request one of five deliberate timing variants.
+      // Regular audition supplies no exportVariation and retains its current
+      // asynchronous behavior unchanged.
+      const exportOffsets = [0, 0.006, 0.013, 0.021, 0.031];
+      const exportVariant = Math.max(1, Math.min(5, Math.round(Number(config?.exportVariation) || 1)));
+      const exportOffset = Number(config?.exportVariation) > 0 ? exportOffsets[exportVariant - 1] : 0;
+      const renderDuration = 0.560 + exportOffset;
       const frames = Math.ceil(ctx.sampleRate * renderDuration);
       const offline = new OfflineAudioContext(1, frames, ctx.sampleRate);
       const offlineOut = offline.createGain();
       offlineOut.connect(offline.destination);
 
-      addNeedleDrop(offline, offlineOut, 0, volume, seed);
-      addNeedleDropClicks(offline, offlineOut, 0, volume * 2.0, seed ^ 0x33ad);
-      addNeedleScratch(offline, offlineOut, 0, volume, seed);
+      addNeedleDrop(offline, offlineOut, exportOffset, volume, seed);
+      addNeedleDropClicks(offline, offlineOut, exportOffset, volume * 2.0, seed ^ 0x33ad);
+      addNeedleScratch(offline, offlineOut, exportOffset, volume, seed);
 
       offline.startRendering().then((rendered) => {
         const shifted = ctx.createBufferSource();
@@ -493,6 +526,10 @@ function spawn(ctx, presetValue, volumeValue, midiNote, offsetSeconds = 0) {
       });
       break;
     }
+
+    case "saturationPop":
+      addSaturationPop(ctx, out, startTime, volume);
+      break;
 
 
 
@@ -601,13 +638,15 @@ TransientSourceEngine.apply = function (ctx, inputNode, config, midiNote, envelo
   if (!generated) return { node: inputNode };
   const mix = ctx.createGain();
   inputNode.connect(mix);
-  const followed = applyTransientEnvelopeFollower(
-    ctx,
-    generated.node,
-    envelopeParams,
-    generated.duration,
-  );
-  followed.connect(mix);
+  const transientNode = generated.preset.followEnvelope === false
+    ? generated.node
+    : applyTransientEnvelopeFollower(
+      ctx,
+      generated.node,
+      envelopeParams,
+      generated.duration,
+    );
+  transientNode.connect(mix);
   return { node: mix };
 };
 

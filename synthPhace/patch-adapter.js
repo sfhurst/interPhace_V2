@@ -4,8 +4,8 @@
   const PROJECT_STORAGE_KEY = "interPhace.interPhace.ui.v2";
   const SYNTH_PATCH_STORAGE_KEY = "interPhace.synthPhace.patch.v1";
   const PATCH_VERSION = 5;
-  const PRETTY_DEFAULT = Object.freeze({ voice: 0, body: 60, harmonics: 28, spread: 0, level: 78, strike: 12, bloom: 45, damp: 35, color: 14, resonance: 14, blend: 55, preset: 0 });
-  const PRETTY_ENVELOPE_DEFAULT = Object.freeze({ attack: 15, bodyDecay: 42, overtoneDecay: 25, damp: 45, release: 18 });
+  const PRETTY_DEFAULT = Object.freeze({ voice: 0, body: 60, harmonics: 28, spread: 0, volume: 80, voicePreset: 0, bloom: 45, damp: 35, color: 14, resonance: 0, blend: 55, preset: 0 });
+  const PRETTY_ENVELOPE_DEFAULT = Object.freeze({ attack: 15, bodyDecay: 42, overtoneDecay: 25, damp: 45, release: 18, preset: 2 });
 
   const DATA = window.SynthPhaceControlData;
   if (!DATA) throw new Error("synthPhace control data missing before patch adapter");
@@ -202,8 +202,8 @@
           body: inputValue("app2_b1_p1_pretty_body", values.prettyBody ?? PRETTY_DEFAULT.body),
           harmonics: inputValue("app2_b1_p1_pretty_harmonics", values.prettyHarmonics ?? PRETTY_DEFAULT.harmonics),
           spread: inputValue("app2_b1_p1_pretty_spread", values.prettySpread ?? PRETTY_DEFAULT.spread),
-          level: inputValue("app2_b1_p1_pretty_level", values.prettyLevel ?? PRETTY_DEFAULT.level),
-          strike: inputValue("app2_b1_p2_pretty_strike", values.prettyStrike ?? PRETTY_DEFAULT.strike),
+          volume: inputValue("app2_b1_p1_pretty_volume", values.prettyVolume ?? PRETTY_DEFAULT.volume),
+          voicePreset: Math.round(inputValue("app2_b1_p1_pretty_voicePreset", values.prettyVoicePreset ?? PRETTY_DEFAULT.voicePreset)),
           bloom: inputValue("app2_b1_p2_pretty_bloom", values.prettyBloom ?? PRETTY_DEFAULT.bloom),
           damp: inputValue("app2_b1_p2_pretty_damp", values.prettyDamp ?? PRETTY_DEFAULT.damp),
           color: inputValue("app2_b1_p2_pretty_color", values.prettyColor ?? PRETTY_DEFAULT.color),
@@ -217,6 +217,7 @@
           overtoneDecay: inputValue("app2_b4_p1_pretty_overtoneDecay", values.prettyOvertoneDecay ?? PRETTY_ENVELOPE_DEFAULT.overtoneDecay),
           damp: inputValue("app2_b4_p1_pretty_damp", values.prettyEnvelopeDamp ?? PRETTY_ENVELOPE_DEFAULT.damp),
           release: inputValue("app2_b4_p1_pretty_release", values.prettyRelease ?? PRETTY_ENVELOPE_DEFAULT.release),
+          preset: Math.round(inputValue("app2_b4_p1_pretty_preset", values.prettyEnvelopePreset ?? PRETTY_ENVELOPE_DEFAULT.preset)),
         },
         fm: {
           carrierVolume: inputValue("app2_b1_p1_carrierVolume", values.carrierVolume ?? 100),
@@ -253,6 +254,12 @@
           valid: !!uiState.drawnEnvelope?.valid,
           duration: inputValue("app2_b4_p3_length", values.drawnEnvelopeLength ?? 2),
           curve: Array.isArray(uiState.drawnEnvelope?.curve) ? uiState.drawnEnvelope.curve.slice(0, 256) : [],
+        },
+        prettyDrawn: {
+          active: selectedEngineMode() === "pretty" && Number(uiState.b4Page) === 2,
+          valid: !!uiState.prettyDrawnEnvelope?.valid,
+          duration: inputValue("app2_b4_p2_pretty_length", values.prettyDrawnEnvelopeLength ?? 2),
+          curve: Array.isArray(uiState.prettyDrawnEnvelope?.curve) ? uiState.prettyDrawnEnvelope.curve.slice(0, 256) : [],
         },
         ahdhd: {
           attack1: inputValue("app2_b4_p1_attack", values.attack ?? 0.04),
