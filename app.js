@@ -172,7 +172,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let globalBedTransports = [];
   let globalBedOrbitController = null;
   let globalAuditionGain = null;
-  let globalLiveBeds = false;
 
   function notifyGlobalAuditionState() {
     window.dispatchEvent(new CustomEvent("interPhace:audition-state"));
@@ -191,45 +190,8 @@ document.addEventListener("DOMContentLoaded", () => {
     onSnapshot: () => saveProjectSnapshot(),
   });
 
-  function publishRuntimeProjectState() {
-    window.InterPhaceShell?.runtime?.publishState("interPhace", {
-      version: 1,
-      project: state.project,
-      mixer: state.mixer,
-      muted: state.muted,
-      bedEntry: {
-        noise: { leadIn: state.child.noiseLeadIn, fadeIn: state.child.noiseFadeIn },
-        drone: { leadIn: state.child.droneLeadIn, fadeIn: state.child.droneFadeIn },
-      },
-    });
-  }
-
-  function globalLiveBedPayload() {
-    const read = key => { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (_) { return null; } };
-    const noise = read("interPhace.noisePhace.ui.v2");
-    const drone = read("interPhace.dronePhace.ui.v2");
-    const project = {
-      version: 1,
-      project: state.project,
-      mixer: state.mixer,
-      muted: state.muted,
-      bedEntry: {
-        noise: { leadIn: state.child.noiseLeadIn, fadeIn: state.child.noiseFadeIn },
-        drone: { leadIn: state.child.droneLeadIn, fadeIn: state.child.droneFadeIn },
-      },
-    };
-    return {
-      project,
-      sources: {
-        noisePhace: noise?.values ? { version: 1, activePage: noise.activePage, values: noise.values } : null,
-        dronePhace: drone?.values ? { version: 1, activePage: drone.activePage, values: drone.values, presets: drone.presets || {}, project: state.project } : null,
-      },
-    };
-  }
-
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    publishRuntimeProjectState();
   }
   if (savePendingScaleOrderMigration) save();
 
@@ -308,19 +270,19 @@ document.addEventListener("DOMContentLoaded", () => {
     includeDrone = false,
   } = {}) {
     const drumFrame = includeDrum
-      ? ensureRenderHost("globalDrumRenderHost", "../drumPhace/index.html")
+      ? ensureRenderHost("globalDrumRenderHost", "drumPhace/index.html")
       : null;
     const synthFrame = includeSynth
-      ? ensureRenderHost("globalSynthRenderHost", "../synthPhace/index.html")
+      ? ensureRenderHost("globalSynthRenderHost", "synthPhace/index.html")
       : null;
     const arpFrame = includeArp
-      ? ensureRenderHost("globalArpRenderHost", "../arpPhace/index.html?v=329")
+      ? ensureRenderHost("globalArpRenderHost", "arpPhace/index.html?v=329")
       : null;
     const noiseFrame = includeNoise
-      ? ensureRenderHost("globalNoiseRenderHost", "../noisePhace/index.html")
+      ? ensureRenderHost("globalNoiseRenderHost", "noisePhace/index.html")
       : null;
     const droneFrame = includeDrone
-      ? ensureRenderHost("globalDroneRenderHost", "../dronePhace/index.html")
+      ? ensureRenderHost("globalDroneRenderHost", "dronePhace/index.html")
       : null;
 
     const drumPromise = includeDrum
@@ -365,7 +327,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return { drumAPI, synthAPI, arpAPI, noiseAPI, droneAPI };
   }
 
-  function stopGlobalAudition({ stopRuntime = true } = {}) {
+  function stopGlobalAudition() {
     globalAuditionGeneration += 1;
 
     const sources = globalAuditionSources.slice();
@@ -376,11 +338,6 @@ document.addEventListener("DOMContentLoaded", () => {
     globalBedTransports = [];
     globalBedOrbitController = null;
     globalAuditionGain = null;
-    if (globalLiveBeds && stopRuntime) {
-      globalLiveBeds = false;
-      window.InterPhaceShell?.runtime?.requestStop?.();
-    }
-    globalLiveBeds = false;
     globalAuditionState = "idle";
     notifyGlobalAuditionState();
     shellBinding.syncPlaying?.();
@@ -489,14 +446,13 @@ document.addEventListener("DOMContentLoaded", () => {
       : !state.muted.synth;
     const noiseActive = !state.muted.noise;
     const droneActive = !state.muted.drone;
-    const useHostedLiveBeds = window.top !== window && !!window.InterPhaceShell?.runtime;
 
     const { drumAPI, synthAPI, arpAPI, noiseAPI, droneAPI } = await getGlobalRenderAPIs({
       includeDrum: drumActive,
       includeSynth: synthActive,
       includeArp: synthActive && (sequencerActive || useArpTrigger),
-      includeNoise: noiseActive && !useHostedLiveBeds,
-      includeDrone: droneActive && !useHostedLiveBeds,
+      includeNoise: noiseActive,
+      includeDrone: droneActive,
     });
     if (generation !== globalAuditionGeneration) return null;
 
@@ -610,14 +566,24 @@ document.addEventListener("DOMContentLoaded", () => {
       if (generation !== globalAuditionGeneration) return null;
     }
 
-    const noiseState = noiseActive && !useHostedLiveBeds ? (noiseAPI.getState?.() || {}) : {};
-    const bedLinkActive = !!(noiseActive && droneActive && state.mixer.droneNoiseLink && !useHostedLiveBeds);
-    const noiseRender = noiseActive && !useHostedLiveBeds
-      ? noiseAPI.renderBed({ sampleRate: 44100, duration: 60, suppressSpaceMotion: bedLinkActive })
+    const noiseState = noiseActive ? (noiseAPI.getState?.() || {}) : {};
+    const bedLinkActive = !!(noiseActive && droneActive && state.mixer.droneNoiseLink);
+
+    const noiseRender = noiseActive
+      ? noiseAPI.renderBed({
+          sampleRate: 44100,
+          duration: 60,
+          suppressSpaceMotion: bedLinkActive,
+        })
       : null;
     if (generation !== globalAuditionGeneration) return null;
-    const droneRender = droneActive && !useHostedLiveBeds
-      ? droneAPI.renderBed({ sampleRate: 44100, duration: 60, suppressSpaceMotion: bedLinkActive })
+
+    const droneRender = droneActive
+      ? droneAPI.renderBed({
+          sampleRate: 44100,
+          duration: 60,
+          suppressSpaceMotion: bedLinkActive,
+        })
       : null;
     if (generation !== globalAuditionGeneration) return null;
 
@@ -800,11 +766,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (ctx.state === "suspended") await ctx.resume();
       if (generation !== globalAuditionGeneration || globalAuditionState !== "rendering") return;
 
-      // nP and dnP are live host sources during iP playback. The musical
-      // material stays on its established render-first path.
-      globalLiveBeds = !!await window.InterPhaceShell?.runtime?.requestGlobalStart?.(globalLiveBedPayload());
-      if (generation !== globalAuditionGeneration || globalAuditionState !== "rendering") return;
-
       const master = ctx.createGain();
       master.gain.value = 1;
       const safety = ctx.createDynamicsCompressor();
@@ -824,8 +785,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // Shift the musical start only as much as needed so no bed is scheduled
       // before the AudioContext's safe start time.
       const transportStartTime = ctx.currentTime + 0.02;
-      const noiseLeadSeconds = Math.max(-10, Math.min(10, Number(state.child.noiseLeadIn) || 0));
-      const droneLeadSeconds = Math.max(-10, Math.min(10, Number(state.child.droneLeadIn) || 0));
+      const noiseLeadSeconds = rendered.noise?.buffer
+        ? Math.max(-10, Math.min(10, Number(state.child.noiseLeadIn) || 0))
+        : 0;
+      const droneLeadSeconds = rendered.drone?.buffer
+        ? Math.max(-10, Math.min(10, Number(state.child.droneLeadIn) || 0))
+        : 0;
       const preRollSeconds = Math.max(0, -noiseLeadSeconds, -droneLeadSeconds);
       const sharedStartTime = transportStartTime + preRollSeconds;
       const noiseBedStartTime = sharedStartTime + noiseLeadSeconds;
@@ -984,18 +949,8 @@ document.addEventListener("DOMContentLoaded", () => {
     else startGlobalAudition();
   });
 
-  window.addEventListener("interPhace:runtime-stop", () => {
-    if (!globalLiveBeds && globalAuditionState === "idle") return;
-    globalLiveBeds = false;
-    stopGlobalAudition();
-  });
-
-  // Leaving the iP view is navigation inside the persistent host, not a Stop.
-  // Dispose iP's render-first sources but leave hosted live beds running.
-  window.addEventListener("pagehide", () => stopGlobalAudition({ stopRuntime: false }));
-  // beforeunload also fires when this iframe is replaced during Phace navigation.
-  // The persistent root host owns the real full-project unload and its context.
-  window.addEventListener("beforeunload", () => stopGlobalAudition({ stopRuntime: false }), { once: true });
+  window.addEventListener("pagehide", stopGlobalAudition);
+  window.addEventListener("beforeunload", stopGlobalAudition, { once: true });
 
   function activePageId() {
     if (state.button === 0) return "app1_startup";
@@ -3934,5 +3889,4 @@ document.addEventListener("DOMContentLoaded", () => {
   else interSequencerMedia.addListener?.(handleInterSequencerColumns);
 
   render();
-  publishRuntimeProjectState();
 });

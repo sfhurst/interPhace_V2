@@ -146,7 +146,6 @@ function save() {
       },
     }));
   } catch (_) {}
-  window.InterPhaceShell?.runtime?.publishState("noisePhace", liveState());
 }
 
 function loadState() {
@@ -641,23 +640,7 @@ function notifyAuditionState() {
   window.dispatchEvent(new CustomEvent("interPhace:audition-state"));
 }
 
-function inPersistentRuntime() {
-  return window.top !== window && !!window.InterPhaceShell?.runtime;
-}
-
-function liveState() {
-  const values = {};
-  document.querySelectorAll(".macroSlider, .presetSlider").forEach(slider => { values[slider.id] = Number(slider.value); });
-  return {
-    version: 1,
-    activePage,
-    values,
-    mixer: window.InterPhaceShell?.readMixerChannelGain?.("noise", { respectMute: false }) || { db: 0, muted: false, gain: 1 },
-  };
-}
-
-function stopAudition({ endRuntime = true } = {}) {
-  if (endRuntime && inPersistentRuntime()) window.InterPhaceShell.runtime.requestStop();
+function stopAudition() {
   auditionTransport?.stop?.();
   auditionTransport = null;
   auditionState = "idle";
@@ -666,16 +649,10 @@ function stopAudition({ endRuntime = true } = {}) {
 
 // Build 484: local audition survives all in-Phace navigation and edits.
 // Leaving this Phace always stops its local audition.
-window.addEventListener("pagehide", () => stopAudition({ endRuntime: false }));
-window.addEventListener("beforeunload", () => stopAudition({ endRuntime: false }), { once: true });
+window.addEventListener("pagehide", stopAudition);
+window.addEventListener("beforeunload", stopAudition, { once: true });
 
 async function startAudition() {
-  if (inPersistentRuntime()) {
-    auditionState = "playing";
-    window.InterPhaceShell.runtime.requestStart("noisePhace", liveState());
-    notifyAuditionState();
-    return;
-  }
   auditionState = "rendering";
   notifyAuditionState();
   await window.InterPhaceShell.paintBeforeSynchronousWork();
@@ -707,12 +684,6 @@ async function startAudition() {
 
 function toggleAudition(event) {
   event?.preventDefault?.();
-  if (inPersistentRuntime() && window.InterPhaceShell.runtime.session()) {
-    window.InterPhaceShell.runtime.requestStop();
-    auditionState = "idle";
-    notifyAuditionState();
-    return;
-  }
   if (auditionState !== "idle") {
     stopAudition();
     return;
@@ -722,13 +693,6 @@ function toggleAudition(event) {
     stopAudition();
   });
 }
-
-window.addEventListener("interPhace:runtime-stop", () => {
-  if (auditionState === "playing") {
-    auditionState = "idle";
-    notifyAuditionState();
-  }
-});
 
 window.NoisePhaceRenderAPI = Object.freeze({
   getState() {
