@@ -32,7 +32,7 @@
   let transportGeneration = 0;
   const TRANSPORT_TICK_MS = 25;
   const TRANSPORT_CONTRACT_VERSION = 1;
-  const RUNTIME_BUILD_VERSION = "647";
+  const RUNTIME_BUILD_VERSION = "648";
   // Kept only for the unused legacy buffer paths below. The live processor
   // path is driven exclusively by the poll-and-coalesce policy.
   let noiseReplacementTimer = null;
@@ -1008,9 +1008,16 @@
     const normalized = normalizeRoute(route);
     const routeUrl = new URL(normalized, window.location.href);
     routeUrl.searchParams.set("build", RUNTIME_BUILD_VERSION);
-    const safe = `${routeUrl.pathname.replace(/^\//, "")}${routeUrl.search}`;
+    // Keep the history route repository-relative, but give the iframe an
+    // origin-rooted source.  GitHub Pages serves this app below
+    // /interPhace_V2/; feeding that base-prefixed path back as a relative
+    // iframe URL would otherwise duplicate the repository directory.
+    const routeState = new URL(normalized, window.location.origin);
+    routeState.searchParams.set("build", RUNTIME_BUILD_VERSION);
+    const safe = `${routeState.pathname.replace(/^\//, "")}${routeState.search}`;
+    const iframeSource = `${routeUrl.pathname}${routeUrl.search}`;
     recordTransportDiagnostic({ stage: "route-requested", route: safe, push, transport: transportSnapshot() });
-    if (view.getAttribute("src") !== safe) view.setAttribute("src", safe);
+    if (view.getAttribute("src") !== iframeSource) view.setAttribute("src", iframeSource);
     const hash = `#${encodeURIComponent(safe)}`;
     if (push) window.history.pushState({ route: safe }, "", hash);
     else if (window.location.hash !== hash) window.history.replaceState({ route: safe }, "", hash);
