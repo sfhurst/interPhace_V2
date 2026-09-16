@@ -153,6 +153,12 @@
   shellBinding.auditionBtn?.addEventListener("click", async () => {
     try {
       window.SynthPhacePatchAdapter?.captureAndSave(state);
+      const liveState = buildLiveRuntimeState();
+      if (window.top !== window && window.InterPhaceShell?.runtime && liveState) {
+        window.InterPhaceShell.runtime.requestStart("synthPhace", liveState);
+        shellBinding.syncPlaying?.();
+        return;
+      }
       await window.SynthPhaceAuditionEngine?.toggle();
       shellBinding.syncPlaying?.();
     } catch (error) {
@@ -171,7 +177,52 @@
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     window.SynthPhacePatchAdapter?.captureAndSave(state);
+    publishLiveRuntimeState();
   }
+
+  function buildLiveRuntimeState() {
+    try {
+      const projectState = JSON.parse(localStorage.getItem("interPhace.interPhace.ui.v2") || "null") || {};
+      const project = projectState.project || {};
+      const child = projectState.child || {};
+      const patch = window.SynthPhacePatchAdapter?.getLegacyPatch?.();
+      if (!patch || typeof patch !== "object") return null;
+      return {
+        version: 1,
+        patch,
+        ui: JSON.parse(JSON.stringify(state)),
+        project: {
+          root: Math.max(21, Math.min(108, Math.round(Number(project.root) || 60))),
+          scale: Math.max(0, Math.round(Number(project.scale) || 0)),
+          tempo: Math.max(30, Math.min(300, Number(project.tempo) || 75)),
+        },
+        playback: {
+          loopLengthBars: Math.max(1, Math.min(16, Math.round(Number(child.synthLoopLength) || 4))),
+          effectsReleaseMs: Math.max(10, Math.min(4000, Number(child.synthEffectsRelease) || 120)),
+          engine: child.synthEngine === "pretty" ? "pretty" : "fm",
+        },
+        mixer: {
+          db: Number(projectState.mixer?.synth) || 0,
+          muted: !!projectState.muted?.synth,
+        },
+      };
+    } catch (error) {
+      console.warn("Could not publish synthPhace live state.", error);
+      return null;
+    }
+  }
+
+  function publishLiveRuntimeState() {
+    const liveState = buildLiveRuntimeState();
+    if (liveState) window.InterPhaceShell?.runtime?.publishState("synthPhace", liveState);
+  }
+
+  // The retained host may need the authoritative saved sP state before the
+  // visible sP view has been opened in this browser session (for example when
+  // aP starts with Arp Tone off).
+  window.SynthPhaceLiveState = Object.freeze({
+    snapshot: buildLiveRuntimeState,
+  });
 
   function currentProjectScaleId() {
     return window.SynthPhacePatchAdapter?.readProjectContext().scaleId || "major";

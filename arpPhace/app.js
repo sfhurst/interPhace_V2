@@ -555,6 +555,26 @@ function saveState() {
       arpGeneratedDisplayOffsetTicks,
     }));
   } catch (_) {}
+  publishLiveRuntimeState();
+}
+
+function buildLiveRuntimeState() {
+  const snapshot = window.ArpPhaceAuditionState?.snapshot?.();
+  if (!snapshot || !Array.isArray(snapshot.events)) return null;
+  // iP Arp mode always owns Melody, even while the visible aP page is B2 or
+  // B3. Publish that authoritative melody snapshot alongside local audition
+  // state so the root never has to ask a stale hidden aP iframe for it.
+  const globalMelody = { ...buildMelodyAuditionSequence(currentPhrase), view: "melody" };
+  const globalMelodyBars = Object.fromEntries(phrases.map(phrase => [
+    phrase,
+    Object.fromEntries(Array.from({ length: MAX_COLS }, (_, index) => [index + 1, buildMelodyBarSequence(phrase, index + 1)])),
+  ]));
+  return JSON.parse(JSON.stringify({ ...snapshot, globalMelody, globalMelodyBars }));
+}
+
+function publishLiveRuntimeState() {
+  const liveState = buildLiveRuntimeState();
+  if (liveState) window.InterPhaceShell?.runtime?.publishState("arpPhace", liveState);
 }
 
 function loadState() {
@@ -3069,7 +3089,10 @@ function melodyPositionFromPhraseLocalIndex(phrase, index) {
 function buildMelodyAuditionSequence(auditionPhrase = currentPhrase) {
   const project = readArpProjectPlaybackSettings();
   const sixteenthSeconds = (60 / project.tempo) / 4;
-  const loopSixteenths = ROWS * MAX_COLS;
+  // B1/B3 audition owns exactly the columns presently exposed by its grid.
+  // Do not let a hidden persistent iframe's media query select the phrase
+  // length; this snapshot is constructed by the visible aP view.
+  const loopSixteenths = ROWS * visibleCols;
   auditionPhrase = phrases.includes(auditionPhrase) ? auditionPhrase : currentPhrase;
 
   // Melody audition is phrase-local. Only the currently selected M1-M4 is
@@ -3246,6 +3269,138 @@ window.ArpPhaceAuditionState = Object.freeze({
     return buildMelodyBarSequence(phrase, barNumber);
   },
 });
+
+window.ArpPhaceLiveState = Object.freeze({
+  snapshot: buildLiveRuntimeState,
+  b1p1Melody() {
+    return Object.freeze({ ...buildMelodyAuditionSequence("p1"), view: "melody" });
+  },
+  globalMelody() {
+    return Object.freeze({ ...buildMelodyAuditionSequence(currentPhrase), view: "melody" });
+  },
+});
+
+
+window.addEventListener("message", event => {
+  if (event.origin !== window.location.origin || event.source !== window.top) return;
+  const message = event.data || {};
+  if (message.type !== "interPhace:runtime-arp-playhead") return;
+  if (window.__rootTransportRunning) return;
+  const playhead = message.playhead || {};
+  document.querySelectorAll(".interPhaceGridPlayhead").forEach(cell => cell.classList.remove("interPhaceGridPlayhead"));
+  if (playhead.mode === "arp") {
+    const cell = document.querySelector(`.arpPatternCell[data-pattern-index="${Math.max(0, Number(playhead.step) % 32)}"]`);
+    cell?.classList.add("interPhaceGridPlayhead");
+    return;
+  }
+  if (playhead.phrase !== currentPhrase) return;
+  const index = Math.max(0, Number(playhead.step) % (ROWS * visibleCols));
+  const row = index % ROWS;
+  const col = Math.floor(index / ROWS);
+  document.querySelectorAll(`.melodyGridCell[data-row="${row}"][data-col="${col}"], .variationGridCell[data-row="${row}"][data-col="${col}"]`)
+    .forEach(cell => cell.classList.add("interPhaceGridPlayhead"));
+});
+
+// B1/B3 and B2 are passive displays of the root transport during hosted
+// playback. They do not run a phrase timer of their own.
+let lastRootMelodyGridDiagnosticKey = null;
+let lastRootMelodyTransportMessageKey = null;
+function recordRootMelodyGridDiagnostic(clock, detail) {
+  const key = `${clock?.generation}:${clock?.step}:${detail.mode}:${detail.row}:${detail.col}`;
+  if (key === lastRootMelodyGridDiagnosticKey) return;
+  lastRootMelodyGridDiagnosticKey = key;
+  const appliedEpochMs = Date.now();
+  window.InterPhaceShell?.runtime?.reportDiagnostic?.("arpPhace", {
+    stage: "aP-grid-applied",
+    rootStep: clock?.step ?? null,
+    rootBar: clock?.bar ?? null,
+    rootStepInBar: clock?.stepInBar ?? null,
+    rootAudioTime: clock?.now ?? null,
+    phrase: currentPhrase,
+    view: currentView,
+    visibleCols,
+    scheduledEpochMs: clock?.scheduledEpochMs ?? null,
+    appliedEpochMs,
+    applyLatencyMs: Number.isFinite(Number(clock?.scheduledEpochMs)) ? appliedEpochMs - Number(clock.scheduledEpochMs) : null,
+    visibilityState: document.visibilityState,
+    childPerformanceMs: Math.round(performance.now()),
+    ...detail,
+  });
+  const reportFrame = frame => {
+    const actual = Array.from(document.querySelectorAll(".interPhaceGridPlayhead")).map(cell => ({
+      row: cell.dataset.row ?? null, col: cell.dataset.col ?? null, patternIndex: cell.dataset.patternIndex ?? null,
+    }));
+    const cells = Array.from(document.querySelectorAll(".interPhaceGridPlayhead"));
+    const paintedEpochMs = Date.now();
+    window.InterPhaceShell?.runtime?.reportDiagnostic?.("arpPhace", {
+      stage: "aP-grid-frame", frame, rootStep: clock?.step ?? null,
+      expectedMode: detail.mode, expectedRow: detail.row, expectedCol: detail.col,
+      actual, phrase: currentPhrase, view: currentView, visibilityState: document.visibilityState,
+      scheduledEpochMs: clock?.scheduledEpochMs ?? null, paintedEpochMs,
+      paintLatencyMs: Number.isFinite(Number(clock?.scheduledEpochMs)) ? paintedEpochMs - Number(clock.scheduledEpochMs) : null,
+      paintedStyles: cells.map(cell => { const style = getComputedStyle(cell); return { row: cell.dataset.row ?? null, col: cell.dataset.col ?? null, patternIndex: cell.dataset.patternIndex ?? null, borderColor: style.borderColor, boxShadow: style.boxShadow, opacity: style.opacity, width: cell.getBoundingClientRect().width, height: cell.getBoundingClientRect().height }; }),
+      childPerformanceMs: Math.round(performance.now()),
+    });
+  };
+  requestAnimationFrame(() => { reportFrame(1); requestAnimationFrame(() => reportFrame(2)); });
+}
+
+document.addEventListener("visibilitychange", () => window.InterPhaceShell?.runtime?.reportDiagnostic?.("arpPhace", {
+  stage: "aP-visibility", visibilityState: document.visibilityState, childPerformanceMs: Math.round(performance.now()),
+}));
+window.addEventListener("message", event => {
+  if (event.origin !== window.location.origin || event.data?.type !== "interPhace:runtime-transport") return;
+  const clock = event.data.transport;
+  const messageKey = `${clock?.generation}:${clock?.step}`;
+  if (messageKey !== lastRootMelodyTransportMessageKey) {
+    lastRootMelodyTransportMessageKey = messageKey;
+    window.InterPhaceShell?.runtime?.reportDiagnostic?.("arpPhace", {
+      stage: "aP-transport-received", rootStep: clock?.step ?? null, rootBar: clock?.bar ?? null,
+      rootStepInBar: clock?.stepInBar ?? null, phrase: currentPhrase, view: currentView,
+      gridCellCount: document.querySelectorAll(".melodyGridCell[data-row][data-col], .variationGridCell[data-row][data-col]").length,
+      childPerformanceMs: Math.round(performance.now()),
+    });
+  }
+  window.__rootTransportRunning = !!clock?.running;
+  document.querySelectorAll(".interPhaceGridPlayhead").forEach(cell => cell.classList.remove("interPhaceGridPlayhead"));
+  if (!clock?.running) return;
+  const sequencedMelody = clock?.sequencerSource?.melody;
+  if (clock?.sequencerSource?.melodySequenced && !sequencedMelody) {
+    recordRootMelodyGridDiagnostic(clock, { mode: "sequenced-cleared", row: null, col: null });
+    return;
+  }
+  if (sequencedMelody) {
+    // iP's sequencer selects a B1/B3 source. B2 is a separate local arp
+    // scheduler and must not pretend it is playing that melody source.
+    if (currentView === "arp" || sequencedMelody.phrase !== currentPhrase || sequencedMelody.column >= visibleCols) {
+      recordRootMelodyGridDiagnostic(clock, { mode: "sequenced-not-visible", row: null, col: null, sourcePhrase: sequencedMelody.phrase, sourceColumn: sequencedMelody.column });
+      return;
+    }
+    const row = Math.max(0, Number(clock.stepInBar) || 0) % ROWS;
+    recordRootMelodyGridDiagnostic(clock, { mode: "sequenced", row, col: sequencedMelody.column, sourcePhrase: sequencedMelody.phrase });
+    document.querySelectorAll(`.melodyGridCell[data-row="${row}"][data-col="${sequencedMelody.column}"], .variationGridCell[data-row="${row}"][data-col="${sequencedMelody.column}"]`)
+      .forEach(cell => cell.classList.add("interPhaceGridPlayhead"));
+    return;
+  }
+  const step = Math.max(0, Number(clock.step) || 0);
+  if (currentView === "arp") {
+    recordRootMelodyGridDiagnostic(clock, { mode: "arp-visible-loop", row: Math.max(0, Number(clock.step) || 0) % 32, col: null });
+    document.querySelector(`.arpPatternCell[data-pattern-index="${step % 32}"]`)?.classList.add("interPhaceGridPlayhead");
+    return;
+  }
+  const index = step % (ROWS * visibleCols);
+  const row = index % ROWS, col = Math.floor(index / ROWS);
+  recordRootMelodyGridDiagnostic(clock, { mode: "melody-visible-loop", row, col });
+  document.querySelectorAll(`.melodyGridCell[data-row="${row}"][data-col="${col}"], .variationGridCell[data-row="${row}"][data-col="${col}"]`)
+    .forEach(cell => cell.classList.add("interPhaceGridPlayhead"));
+});
+
+publishLiveRuntimeState();
+requestAnimationFrame(() => window.InterPhaceShell?.runtime?.reportDiagnostic?.("arpPhace", {
+  stage: "aP-grid-ready", phrase: currentPhrase, view: currentView, visibleCols,
+  gridCellCount: document.querySelectorAll(".melodyGridCell[data-row][data-col], .variationGridCell[data-row][data-col]").length,
+  childPerformanceMs: Math.round(performance.now()),
+}));
 
 window.addEventListener("beforeunload", () => window.ArpPhaceAuditionEngine?.stop());
 window.addEventListener("pagehide", () => window.ArpPhaceAuditionEngine?.stop());

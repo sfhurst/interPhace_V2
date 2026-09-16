@@ -45,29 +45,22 @@ document.addEventListener("DOMContentLoaded", () => {
     button: 0,
     b2Page: 1,
     b5Page: 1,
-    project: { name: "", root: 60, scale: 0, scaleOrderVersion: 2, tempo: 75, length: 4, swing: 0, timing: 0 },
+    project: { name: "", root: 60, scale: 0, scaleOrderVersion: 2, tempo: 75, swing: 0 },
     mixer: { synth: 0, kick: 0, snare: 0, hat: 0, noise: 0, drone: 0, droneNoiseLink: false },
     mixerVersion: 2,
     muted: {},
     sequencer: Array.from({ length: 16 }, () => Array(4).fill("")),
     child: {
-      synthTiming: 100,
       synthEngine: "fm",
       synthLoopLength: 4,
-      synthAuditionLoop: false,
-      synthAuditionLength: 6,
       synthEffectsRelease: 120,
-      drumTiming: 100,
       drumBorders: false,
-      arpTiming: 100,
       arpEffectsRelease: 30,
       arpTone: true,
       synthUseArpTrigger: false,
-      noiseTiming: 100,
       noiseLeadIn: 0,
       noiseFadeIn: 0,
       noiseExportLength: 2,
-      droneTiming: 100,
       droneLeadIn: 0,
       droneFadeIn: 0,
       droneExportLength: 2,
@@ -161,9 +154,16 @@ document.addEventListener("DOMContentLoaded", () => {
   if (state.project.root >= 0 && state.project.root <= 11) state.project.root = 60 + state.project.root;
   state.project.root = Math.max(21, Math.min(108, Math.round(state.project.root)));
 
-  state.project.length = Number(state.project.length);
-  if (!Number.isFinite(state.project.length)) state.project.length = 4;
-  state.project.length = Math.max(4, Math.min(64, Math.round(state.project.length / 4) * 4));
+  // Build 644 retires the unused Timing controls and the obsolete iP project
+  // Length. Their saved values never affected the retained live runtime. Drop
+  // them after loading so old projects migrate cleanly on their next save.
+  delete state.project.length;
+  delete state.project.timing;
+  delete state.child.synthTiming;
+  delete state.child.drumTiming;
+  delete state.child.arpTiming;
+  delete state.child.noiseTiming;
+  delete state.child.droneTiming;
 
   let globalAuditionState = "idle";
   let globalAuditionGeneration = 0;
@@ -172,6 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let globalBedTransports = [];
   let globalBedOrbitController = null;
   let globalAuditionGain = null;
+  let globalLiveBeds = false;
 
   function notifyGlobalAuditionState() {
     window.dispatchEvent(new CustomEvent("interPhace:audition-state"));
@@ -190,8 +191,78 @@ document.addEventListener("DOMContentLoaded", () => {
     onSnapshot: () => saveProjectSnapshot(),
   });
 
+  function publishRuntimeProjectState() {
+    window.InterPhaceShell?.runtime?.publishState("interPhace", {
+      version: 1,
+      project: state.project,
+      mixer: state.mixer,
+      muted: state.muted,
+      child: state.child,
+      bedEntry: {
+        noise: { leadIn: state.child.noiseLeadIn, fadeIn: state.child.noiseFadeIn },
+        drone: { leadIn: state.child.droneLeadIn, fadeIn: state.child.droneFadeIn },
+      },
+    });
+  }
+
+  function globalLiveBedPayload() {
+    const read = key => { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (_) { return null; } };
+    const noise = read("interPhace.noisePhace.ui.v2");
+    const drone = read("interPhace.dronePhace.ui.v2");
+    const drum = read("drumPhace.build5.state");
+    const sequenceInfo = interSequencerInfo();
+    const defaultDrumBars = Math.max(1, Math.min(8, Math.round(Number(drum?.visibleColumns) || currentRenderColumns())));
+    // A blank iP sequencer is the normal default performance: K/S/H each
+    // loop their visible columns.  Publish it as source bars so the retained
+    // dP engine, rather than iP's disposable render buffer, owns that audio.
+    const drumSequence = sequenceInfo.active
+      ? (sequenceInfo.hasDrums ? state.sequencer.slice(0, sequenceInfo.bars).map(row => ({
+          kick: parseSequencerCell(row?.[1], 1)?.bar,
+          snare: parseSequencerCell(row?.[2], 2)?.bar,
+          hat: parseSequencerCell(row?.[3], 3)?.bar,
+        })) : null)
+      : Array.from({ length: defaultDrumBars }, (_, index) => ({
+          kick: index + 1,
+          snare: index + 1,
+          hat: index + 1,
+        }));
+    const melodySequence = sequenceInfo.active
+      ? state.sequencer.slice(0, sequenceInfo.bars).map(row => parseSequencerCell(row?.[0], 0))
+      : null;
+    const drumMixer = Object.fromEntries(["kick", "snare", "hat"].map(channel => {
+      const db = Number(state.mixer?.[channel]) || 0;
+      const muted = !!state.muted?.[channel];
+      return [channel, { db, muted, gain: muted ? 0 : Math.pow(10, db / 20) }];
+    }));
+    const project = {
+      version: 1,
+      project: state.project,
+      mixer: state.mixer,
+      muted: state.muted,
+      bedEntry: {
+        noise: { leadIn: state.child.noiseLeadIn, fadeIn: state.child.noiseFadeIn },
+        drone: { leadIn: state.child.droneLeadIn, fadeIn: state.child.droneFadeIn },
+      },
+    };
+    return {
+      project,
+      sources: {
+        noisePhace: noise?.values ? { version: 1, activePage: noise.activePage, values: noise.values } : null,
+        dronePhace: drone?.values ? { version: 1, activePage: drone.activePage, values: drone.values, presets: drone.presets || {}, project: state.project } : null,
+        drumPhace: drumSequence && drum?.patterns ? { version: 1, snapshot: drum, sequence: drumSequence, mixer: drumMixer } : null,
+        pitched: {
+          enabled: !state.muted.synth && (!sequenceInfo.active || sequenceInfo.hasMelody),
+          mode: sequenceInfo.active ? "sequencer-melody" : (state.child.synthUseArpTrigger === true ? "melody" : "synth"),
+          melodySequence,
+          mixer: { db: Number(state.mixer?.synth) || 0, muted: !!state.muted.synth, gain: state.muted.synth ? 0 : Math.pow(10, (Number(state.mixer?.synth) || 0) / 20) },
+        },
+      },
+    };
+  }
+
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    publishRuntimeProjectState();
   }
   if (savePendingScaleOrderMigration) save();
 
@@ -270,19 +341,19 @@ document.addEventListener("DOMContentLoaded", () => {
     includeDrone = false,
   } = {}) {
     const drumFrame = includeDrum
-      ? ensureRenderHost("globalDrumRenderHost", "drumPhace/index.html")
+      ? ensureRenderHost("globalDrumRenderHost", "../drumPhace/index.html")
       : null;
     const synthFrame = includeSynth
-      ? ensureRenderHost("globalSynthRenderHost", "synthPhace/index.html")
+      ? ensureRenderHost("globalSynthRenderHost", "../synthPhace/index.html")
       : null;
     const arpFrame = includeArp
-      ? ensureRenderHost("globalArpRenderHost", "arpPhace/index.html?v=329")
+      ? ensureRenderHost("globalArpRenderHost", "../arpPhace/index.html?v=329")
       : null;
     const noiseFrame = includeNoise
-      ? ensureRenderHost("globalNoiseRenderHost", "noisePhace/index.html")
+      ? ensureRenderHost("globalNoiseRenderHost", "../noisePhace/index.html")
       : null;
     const droneFrame = includeDrone
-      ? ensureRenderHost("globalDroneRenderHost", "dronePhace/index.html")
+      ? ensureRenderHost("globalDroneRenderHost", "../dronePhace/index.html")
       : null;
 
     const drumPromise = includeDrum
@@ -327,7 +398,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return { drumAPI, synthAPI, arpAPI, noiseAPI, droneAPI };
   }
 
-  function stopGlobalAudition() {
+  function stopGlobalAudition({ stopRuntime = true } = {}) {
     globalAuditionGeneration += 1;
 
     const sources = globalAuditionSources.slice();
@@ -338,6 +409,11 @@ document.addEventListener("DOMContentLoaded", () => {
     globalBedTransports = [];
     globalBedOrbitController = null;
     globalAuditionGain = null;
+    if (globalLiveBeds && stopRuntime) {
+      globalLiveBeds = false;
+      window.InterPhaceShell?.runtime?.requestStop?.();
+    }
+    globalLiveBeds = false;
     globalAuditionState = "idle";
     notifyGlobalAuditionState();
     shellBinding.syncPlaying?.();
@@ -423,7 +499,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const sequencerActive = sequenceInfo.active;
     const projectBars = sequencerActive
       ? sequenceInfo.bars
-      : Math.max(4, Math.min(64, Number(state.project.length) || 4));
+      : currentRenderColumns();
     const tempo = Math.max(30, Math.min(300, Number(state.project.tempo) || 75));
     const secondsPerBar = (60 / tempo) * 4;
     const loopSeconds = projectBars * secondsPerBar;
@@ -438,21 +514,29 @@ document.addEventListener("DOMContentLoaded", () => {
     const seqHasSnare = sequencerActive && state.sequencer.some(row => !!row?.[2]);
     const seqHasHat = sequencerActive && state.sequencer.some(row => !!row?.[3]);
 
-    const drumActive = sequencerActive
+    let drumActive = sequencerActive
       ? ((seqHasKick && !state.muted.kick) || (seqHasSnare && !state.muted.snare) || (seqHasHat && !state.muted.hat))
       : ["kick", "snare", "hat"].some(channel => !state.muted[channel]);
-    const synthActive = sequencerActive
+    let synthActive = sequencerActive
       ? (sequenceInfo.hasMelody && !state.muted.synth)
       : !state.muted.synth;
     const noiseActive = !state.muted.noise;
     const droneActive = !state.muted.drone;
+    const useHostedLiveBeds = window.top !== window && !!window.InterPhaceShell?.runtime;
+    // Pitched sources are live in hosted iP playback; never also render their
+    // former offline buffer into the iP mix.
+    if (useHostedLiveBeds) synthActive = false;
+    // Both sequenced drums and the blank-sequencer K/S/H default are now
+    // retained dP sources. Never also put iP's rendered drum buffer in mix.
+    const useHostedLiveDrums = useHostedLiveBeds && (!sequencerActive || sequenceInfo.hasDrums);
+    if (useHostedLiveDrums) drumActive = false;
 
     const { drumAPI, synthAPI, arpAPI, noiseAPI, droneAPI } = await getGlobalRenderAPIs({
-      includeDrum: drumActive,
+      includeDrum: drumActive && !useHostedLiveDrums,
       includeSynth: synthActive,
       includeArp: synthActive && (sequencerActive || useArpTrigger),
-      includeNoise: noiseActive,
-      includeDrone: droneActive,
+      includeNoise: noiseActive && !useHostedLiveBeds,
+      includeDrone: droneActive && !useHostedLiveBeds,
     });
     if (generation !== globalAuditionGeneration) return null;
 
@@ -566,24 +650,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (generation !== globalAuditionGeneration) return null;
     }
 
-    const noiseState = noiseActive ? (noiseAPI.getState?.() || {}) : {};
-    const bedLinkActive = !!(noiseActive && droneActive && state.mixer.droneNoiseLink);
-
-    const noiseRender = noiseActive
-      ? noiseAPI.renderBed({
-          sampleRate: 44100,
-          duration: 60,
-          suppressSpaceMotion: bedLinkActive,
-        })
+    const noiseState = noiseActive && !useHostedLiveBeds ? (noiseAPI.getState?.() || {}) : {};
+    const bedLinkActive = !!(noiseActive && droneActive && state.mixer.droneNoiseLink && !useHostedLiveBeds);
+    const noiseRender = noiseActive && !useHostedLiveBeds
+      ? noiseAPI.renderBed({ sampleRate: 44100, duration: 60, suppressSpaceMotion: bedLinkActive })
       : null;
     if (generation !== globalAuditionGeneration) return null;
-
-    const droneRender = droneActive
-      ? droneAPI.renderBed({
-          sampleRate: 44100,
-          duration: 60,
-          suppressSpaceMotion: bedLinkActive,
-        })
+    const droneRender = droneActive && !useHostedLiveBeds
+      ? droneAPI.renderBed({ sampleRate: 44100, duration: 60, suppressSpaceMotion: bedLinkActive })
       : null;
     if (generation !== globalAuditionGeneration) return null;
 
@@ -750,12 +824,25 @@ document.addEventListener("DOMContentLoaded", () => {
     shellBinding.syncPlaying?.();
 
     try {
-      // Force the dim Stop rendering state to paint before any heavy child DSP begins.
-      // This is especially important after the hidden render-host iframes already exist,
-      // when renderGlobalMix() can otherwise enter synchronous child rendering immediately.
+      // Hosted iP playback is entirely root-runtime owned.  Do not wake the
+      // old iP render context, wait through its legacy render pause, or build
+      // silent render buses before starting the root transport.
       await window.InterPhaceShell.paintBeforeSynchronousWork();
       if (generation !== globalAuditionGeneration || globalAuditionState !== "rendering") return;
 
+      const liveRuntimeStart = await window.InterPhaceShell?.runtime?.requestGlobalStart?.(globalLiveBedPayload());
+      if (generation !== globalAuditionGeneration || globalAuditionState !== "rendering") return;
+      if (liveRuntimeStart?.started) {
+        globalLiveBeds = true;
+        globalAuditionState = "playing";
+        notifyGlobalAuditionState();
+        shellBinding.syncPlaying?.();
+        return;
+      }
+
+      // Standalone iP, or an unavailable root runtime, retains the established
+      // completed-buffer audition path. Export continues to use its own
+      // offline-render workflow.
       const rendered = await renderGlobalMix(generation);
       if (!rendered || generation !== globalAuditionGeneration || globalAuditionState !== "rendering") return;
 
@@ -785,12 +872,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Shift the musical start only as much as needed so no bed is scheduled
       // before the AudioContext's safe start time.
       const transportStartTime = ctx.currentTime + 0.02;
-      const noiseLeadSeconds = rendered.noise?.buffer
-        ? Math.max(-10, Math.min(10, Number(state.child.noiseLeadIn) || 0))
-        : 0;
-      const droneLeadSeconds = rendered.drone?.buffer
-        ? Math.max(-10, Math.min(10, Number(state.child.droneLeadIn) || 0))
-        : 0;
+      const noiseLeadSeconds = Math.max(-10, Math.min(10, Number(state.child.noiseLeadIn) || 0));
+      const droneLeadSeconds = Math.max(-10, Math.min(10, Number(state.child.droneLeadIn) || 0));
       const preRollSeconds = Math.max(0, -noiseLeadSeconds, -droneLeadSeconds);
       const sharedStartTime = transportStartTime + preRollSeconds;
       const noiseBedStartTime = sharedStartTime + noiseLeadSeconds;
@@ -949,8 +1032,18 @@ document.addEventListener("DOMContentLoaded", () => {
     else startGlobalAudition();
   });
 
-  window.addEventListener("pagehide", stopGlobalAudition);
-  window.addEventListener("beforeunload", stopGlobalAudition, { once: true });
+  window.addEventListener("interPhace:runtime-stop", () => {
+    if (!globalLiveBeds && globalAuditionState === "idle") return;
+    globalLiveBeds = false;
+    stopGlobalAudition();
+  });
+
+  // Leaving the iP view is navigation inside the persistent host, not a Stop.
+  // Dispose iP's render-first sources but leave hosted live beds running.
+  window.addEventListener("pagehide", () => stopGlobalAudition({ stopRuntime: false }));
+  // beforeunload also fires when this iframe is replaced during Phace navigation.
+  // The persistent root host owns the real full-project unload and its context.
+  window.addEventListener("beforeunload", () => stopGlobalAudition({ stopRuntime: false }), { once: true });
 
   function activePageId() {
     if (state.button === 0) return "app1_startup";
@@ -973,38 +1066,25 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${note}${octave} (${midi})`;
   }
 
-  function durationText(bars, tempo) {
-    const seconds = Math.round((bars * 4 * 60) / tempo);
-    const mins = Math.floor(seconds / 60);
-    const secs = String(seconds % 60).padStart(2, "0");
-    return `${bars} bar${bars === 1 ? "" : "s"} (${mins}:${secs})`;
-  }
-
   function renderProject() {
     const name = document.getElementById("app1_b1_p1_projectName");
     const root = document.getElementById("app1_b1_p1_rootNote");
     const scale = document.getElementById("app1_b1_p1_scale");
     const tempo = document.getElementById("app1_b1_p1_tempo");
-    const length = document.getElementById("app1_b1_p1_length");
     const swing = document.getElementById("app1_b1_p1_swing");
-    const timing = document.getElementById("app1_b1_p1_timing");
 
     name.value = state.project.name;
     root.value = state.project.root;
     scale.value = state.project.scale;
     tempo.value = state.project.tempo;
-    length.value = state.project.length;
     swing.value = state.project.swing;
-    timing.value = state.project.timing;
 
     document.getElementById("app1_b1_p1_rootNote_value").textContent = midiNoteText(state.project.root);
     document.getElementById("app1_b1_p1_scale_value").textContent = SCALES[state.project.scale] || SCALES[0];
     document.getElementById("app1_b1_p1_tempo_value").textContent = `${state.project.tempo} BPM`;
-    document.getElementById("app1_b1_p1_length_value").textContent = durationText(state.project.length, state.project.tempo);
     document.getElementById("app1_b1_p1_swing_value").textContent = `${state.project.swing}%`;
-    document.getElementById("app1_b1_p1_timing_value").textContent = `±${state.project.timing} ms`;
 
-    [root, scale, tempo, length, swing, timing].forEach(setSliderVisual);
+    [root, scale, tempo, swing].forEach(setSliderVisual);
   }
 
 
@@ -1050,7 +1130,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (droneNoiseLinkToggle) droneNoiseLinkToggle.checked = state.mixer.droneNoiseLink === true;
   }
 
-  // Audition Length positions: 1-5 seconds, 6 = Full. Older values above 5 migrate to Full.
   state.child.synthLoopLength = Math.max(
     1,
     Math.min(16, Math.round(Number(state.child.synthLoopLength) || 4)),
@@ -1066,12 +1145,10 @@ document.addEventListener("DOMContentLoaded", () => {
     state.child.synthEngine = state.child.synthEngine === "pretty" ? "pretty" : "fm";
   }
 
-  state.child.synthAuditionLength = Number(state.child.synthAuditionLength);
-  if (!Number.isFinite(state.child.synthAuditionLength) || state.child.synthAuditionLength > 5) {
-    state.child.synthAuditionLength = 6;
-  } else {
-    state.child.synthAuditionLength = Math.max(1, Math.min(5, state.child.synthAuditionLength));
-  }
+  // The former local Loop Audition and Loop Voice Length controls were retired
+  // for the live sP migration. Old project fields are discarded on the next save.
+  delete state.child.synthAuditionLoop;
+  delete state.child.synthAuditionLength;
 
   const BED_EXPORT_LENGTHS_SECONDS = Object.freeze([15, 30, 60, 120, 180, 300]);
 
@@ -1083,17 +1160,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderChildSettings() {
     const bindings = [
       ["app1_b5_p1_loopLength", state.child.synthLoopLength, `${state.child.synthLoopLength} ${state.child.synthLoopLength === 1 ? "bar" : "bars"}`],
-      ["app1_b5_p1_auditionLength", state.child.synthAuditionLength, state.child.synthAuditionLength === 6 ? "Full" : `${state.child.synthAuditionLength} s`],
       ["app1_b5_p1_effectsRelease", effectsReleaseIndex(state.child.synthEffectsRelease, 120), formatEffectsRelease(state.child.synthEffectsRelease)],
-      ["app1_b5_p1_timing", state.child.synthTiming, `${state.child.synthTiming}%`],
-      ["app1_b5_p2_timing", state.child.drumTiming, `${state.child.drumTiming}%`],
-      ["app1_b5_p3_timing", state.child.arpTiming, `${state.child.arpTiming}%`],
       ["app1_b5_p3_effectsRelease", effectsReleaseIndex(state.child.arpEffectsRelease, 30), formatEffectsRelease(state.child.arpEffectsRelease)],
-      ["app1_b5_p4_timing", state.child.noiseTiming, `${state.child.noiseTiming}%`],
       ["app1_b5_p4_leadIn", state.child.noiseLeadIn, `${state.child.noiseLeadIn > 0 ? "+" : ""}${state.child.noiseLeadIn} s`],
       ["app1_b5_p4_fadeIn", state.child.noiseFadeIn, `${state.child.noiseFadeIn} s`],
       ["app1_b5_p4_exportLength", state.child.noiseExportLength, `${bedExportLengthSeconds(state.child.noiseExportLength)} s`],
-      ["app1_b5_p5_timing", state.child.droneTiming, `${state.child.droneTiming}%`],
       ["app1_b5_p5_leadIn", state.child.droneLeadIn, `${state.child.droneLeadIn > 0 ? "+" : ""}${state.child.droneLeadIn} s`],
       ["app1_b5_p5_fadeIn", state.child.droneFadeIn, `${state.child.droneFadeIn} s`],
       ["app1_b5_p5_exportLength", state.child.droneExportLength, `${bedExportLengthSeconds(state.child.droneExportLength)} s`],
@@ -1107,7 +1178,6 @@ document.addEventListener("DOMContentLoaded", () => {
       setSliderVisual(slider);
       document.getElementById(`${id}_value`).textContent = text;
     });
-    document.getElementById("app1_b5_p1_auditionLoop").checked = !!state.child.synthAuditionLoop;
     const synthEngineToggle = document.getElementById("app1_b5_p1_synthEngine");
     if (synthEngineToggle) synthEngineToggle.checked = state.child.synthEngine === "pretty";
     document.getElementById("app1_b5_p2_otherInstrumentBorders").checked = !!state.child.drumBorders;
@@ -1502,9 +1572,7 @@ document.addEventListener("DOMContentLoaded", () => {
     app1_b1_p1_rootNote: ["root", Number],
     app1_b1_p1_scale: ["scale", Number],
     app1_b1_p1_tempo: ["tempo", Number],
-    app1_b1_p1_length: ["length", Number],
     app1_b1_p1_swing: ["swing", Number],
-    app1_b1_p1_timing: ["timing", Number],
   };
 
   document.getElementById("app1_b1_p1_projectName")?.addEventListener("input", (event) => {
@@ -1538,15 +1606,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const childSliderBindings = {
     app1_b5_p1_loopLength: ["synthLoopLength", Number],
-    app1_b5_p1_auditionLength: ["synthAuditionLength", Number],
-    app1_b5_p1_timing: ["synthTiming", Number],
-    app1_b5_p2_timing: ["drumTiming", Number],
-    app1_b5_p3_timing: ["arpTiming", Number],
-    app1_b5_p4_timing: ["noiseTiming", Number],
     app1_b5_p4_leadIn: ["noiseLeadIn", Number],
     app1_b5_p4_fadeIn: ["noiseFadeIn", Number],
     app1_b5_p4_exportLength: ["noiseExportLength", Number],
-    app1_b5_p5_timing: ["droneTiming", Number],
     app1_b5_p5_leadIn: ["droneLeadIn", Number],
     app1_b5_p5_fadeIn: ["droneFadeIn", Number],
     app1_b5_p5_exportLength: ["droneExportLength", Number],
@@ -1580,7 +1642,6 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMixer();
   });
 
-  document.getElementById("app1_b5_p1_auditionLoop")?.addEventListener("change", (event) => { state.child.synthAuditionLoop = event.target.checked; save(); });
   document.getElementById("app1_b5_p1_synthEngine")?.addEventListener("change", (event) => {
     state.child.synthEngine = event.target.checked ? "pretty" : "fm";
     try {
@@ -2835,7 +2896,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (needSynth && synthAPI?.renderConstructionNote) {
       const root=Math.round(Number(state.project.root)||60);
-      const gate=Math.max(0.25,Number(state.settings?.synthAuditionLength)||2);
+      const gate=2;
       for (const dry of [true,false]) {
         const label = `Synth root ${dry ? "dry" : "wet"}`;
         report(label);
@@ -3637,6 +3698,14 @@ document.addEventListener("DOMContentLoaded", () => {
       b5Page: Number(doc.ui?.settingsPage) || 1,
       mixerVersion: 2,
     };
+    // Accept older project files without preserving retired UI-only controls.
+    delete restoredRootState.project.length;
+    delete restoredRootState.project.timing;
+    delete restoredRootState.child.synthTiming;
+    delete restoredRootState.child.drumTiming;
+    delete restoredRootState.child.arpTiming;
+    delete restoredRootState.child.noiseTiming;
+    delete restoredRootState.child.droneTiming;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(restoredRootState));
 
     const patches = doc.patches && typeof doc.patches === "object" ? doc.patches : {};
@@ -3889,4 +3958,5 @@ document.addEventListener("DOMContentLoaded", () => {
   else interSequencerMedia.addListener?.(handleInterSequencerColumns);
 
   render();
+  publishRuntimeProjectState();
 });

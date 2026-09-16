@@ -1,0 +1,72 @@
+build-592-transport/drumPhace/app.js:3687:async function renderVisiblePattern({
+build-592-transport/drumPhace/app.js:3803:  renderVisible: renderVisiblePattern,
+build-592-transport/drumPhace/app.js:3813:    return renderVisiblePattern({
+build-592-transport/drumPhace/app.js:3831:    return renderVisiblePattern({
+build-592-transport/drumPhace/app.js:3913:async function startLiveDrumAudition(mode = "active", sequence = null, mixer = null, startDelay = null) {
+build-592-transport/drumPhace/app.js:3945:async function startAudition(mode = "active") {
+build-592-transport/drumPhace/app.js:3953:  return startLiveDrumAudition(mode);
+build-592-transport/drumPhace/app.js:3967:    const rendered = await renderVisiblePattern({
+build-592-transport/drumPhace/app.js:4030:    await startLiveDrumAudition("all", null, null, state?.runtimeEntry?.startDelay);
+build-592-transport/drumPhace/app.js:4037:    await startLiveDrumAudition("all", state?.sequence, state?.mixer, state?.runtimeEntry?.startDelay);
+build-592-transport/drumPhace/app.js:4067:  startAudition(currentView === "synth" ? "active" : "all");
+build-592-transport/arpPhace/audio/audition-engine.js:309:  function stop() {
+build-592-transport/arpPhace/audio/audition-engine.js:343:  async function play(stateOverride = null) {
+build-592-transport/arpPhace/audio/audition-engine.js:403:  async function startLive(state, synthState) {
+build-592-transport/arpPhace/audio/audition-engine.js:568:    start: startLive,
+build-592-transport/synthPhace/audio/audition-engine.js:373:  function stop() {
+build-592-transport/synthPhace/audio/audition-engine.js:457:  async function play() {
+build-592-transport/synthPhace/audio/audition-engine.js:483:  async function renderGlobalTrigger({ gateSeconds, effectsReleaseMs = 120 } = {}) {
+build-592-transport/synthPhace/audio/audition-engine.js:901:  async function startLive(state) {
+build-592-transport/synthPhace/audio/audition-engine.js:992:  async function startLiveArp(state) {
+build-592-transport/synthPhace/audio/audition-engine.js:1023:    renderGlobalTrigger,
+build-592-transport/synthPhace/audio/audition-engine.js:1035:    start: startLive,
+build-592-transport/synthPhace/audio/audition-engine.js:1037:    startArp: startLiveArp,
+build-592-transport/noisePhace/app.js:672:async function startAudition() {
+build-592-transport/noisePhace/app.js:720:  startAudition().catch(error => {
+build-592-transport/noisePhace/app.js:740:  renderBed({
+build-592-transport/dronePhace/app.js:814:  renderBed({
+build-592-transport/dronePhace/app.js:860:async function startAudition() {
+build-592-transport/dronePhace/app.js:913:  startAudition().catch(error => {
+build-592-transport/shared/runtime-shell.js:77:      const replace = phace === "noisePhace" ? replaceLiveNoise(effectiveLiveState(phace, entry.state)) : replaceLiveDroneProcessor(effectiveLiveState(phace, entry.state));
+build-592-transport/shared/runtime-shell.js:226:  async function replaceLiveNoise(state, { immediate = false } = {}) {
+build-592-transport/shared/runtime-shell.js:313:  async function replaceLiveDroneProcessor(state, immediate = false) {
+build-592-transport/shared/runtime-shell.js:386:  async function replaceLiveDrone(state, { immediate = false } = {}) {
+build-592-transport/shared/runtime-shell.js:403:    droneReplacementTimer = window.setTimeout(() => { droneReplacementTimer = null; if (activeSession?.phace === "dronePhace") replaceLiveDrone(state).catch(console.error); }, 550);
+build-592-transport/shared/runtime-shell.js:425:  async function startRuntimeSession(phace, state) {
+build-592-transport/shared/runtime-shell.js:426:    stopRuntimeSession();
+build-592-transport/shared/runtime-shell.js:438:    if (phace === "noisePhace") await replaceLiveNoise(state, { immediate: true });
+build-592-transport/shared/runtime-shell.js:439:    if (phace === "dronePhace") await replaceLiveDroneProcessor(state, true);
+build-592-transport/shared/runtime-shell.js:454:  async function startGlobalRuntimeSession(payload) {
+build-592-transport/shared/runtime-shell.js:455:    stopRuntimeSession();
+build-592-transport/shared/runtime-shell.js:531:      ? replaceLiveNoise(effectiveLiveState(phace, phaceStates.get(phace)), { immediate: true })
+build-592-transport/shared/runtime-shell.js:533:        ? replaceLiveDroneProcessor(effectiveLiveState(phace, phaceStates.get(phace)), true)
+build-592-transport/shared/runtime-shell.js:543:  function stopRuntimeSession() {
+build-592-transport/shared/runtime-shell.js:643:      await startRuntimeSession(message.phace, state);
+build-592-transport/shared/runtime-shell.js:647:      await startGlobalRuntimeSession(message.payload);
+build-592-transport/shared/runtime-shell.js:655:      stopRuntimeSession();
+build-592-transport/shared/runtime-shell.js:667:    start: (phace, state) => startRuntimeSession(phace, state),
+build-592-transport/shared/runtime-shell.js:668:    startGlobal: payload => startGlobalRuntimeSession(payload),
+build-592-transport/shared/runtime-shell.js:669:    stop: () => stopRuntimeSession(),
+build-592-transport/app.js:350:          win => win?.SynthPhaceAuditionEngine?.renderGlobalTrigger &&
+build-592-transport/app.js:369:      ? waitForFrameAPI(noiseFrame, win => win?.NoisePhaceRenderAPI?.renderBed ? win.NoisePhaceRenderAPI : null)
+build-592-transport/app.js:372:      ? waitForFrameAPI(droneFrame, win => win?.DronePhaceRenderAPI?.renderBed ? win.DronePhaceRenderAPI : null)
+build-592-transport/app.js:386:  function stopGlobalAudition({ stopRuntime = true } = {}) {
+build-592-transport/app.js:482:  async function renderGlobalMix(generation) {
+build-592-transport/app.js:600:        ? drumAPI.renderVisible({
+build-592-transport/app.js:625:          synthRender = await synthAPI.renderGlobalTrigger({
+build-592-transport/app.js:639:      ? noiseAPI.renderBed({ sampleRate: 44100, duration: 60, suppressSpaceMotion: bedLinkActive })
+build-592-transport/app.js:643:      ? droneAPI.renderBed({ sampleRate: 44100, duration: 60, suppressSpaceMotion: bedLinkActive })
+build-592-transport/app.js:801:  async function startGlobalAudition() {
+build-592-transport/app.js:812:      // when renderGlobalMix() can otherwise enter synchronous child rendering immediately.
+build-592-transport/app.js:816:      const rendered = await renderGlobalMix(generation);
+build-592-transport/app.js:1011:    if (globalAuditionState !== "idle") stopGlobalAudition();
+build-592-transport/app.js:1012:    else startGlobalAudition();
+build-592-transport/app.js:1018:    stopGlobalAudition();
+build-592-transport/app.js:1023:  window.addEventListener("pagehide", () => stopGlobalAudition({ stopRuntime: false }));
+build-592-transport/app.js:1026:  window.addEventListener("beforeunload", () => stopGlobalAudition({ stopRuntime: false }), { once: true });
+build-592-transport/app.js:1515:    if (globalAuditionState !== "idle") stopGlobalAudition();
+build-592-transport/app.js:1864:          if (globalAuditionState !== "idle") stopGlobalAudition();
+build-592-transport/app.js:2883:      const r=noiseAPI.renderBed({duration});
+build-592-transport/app.js:2889:      const r=droneAPI.renderBed({duration});
+build-592-transport/app.js:2985:        const r=noiseAPI.renderBed({duration:bedExportLengthSeconds(state.child.noiseExportLength)});
+build-592-transport/app.js:2990:        const r=droneAPI.renderBed({duration:bedExportLengthSeconds(state.child.droneExportLength)});

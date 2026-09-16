@@ -19,6 +19,11 @@
   let loopPassIndex = 0;
   let synthBuffers = null;
   let synthHost = null;
+  let runtimeSynthState = null;
+  let runtimeUsesPitchedEngine = false;
+  let pendingRuntimeState = null;
+  let playheadTimers = [];
+  let melodyBarIndex = 0;
 
   function midiToFrequency(midiNote) {
     return 440 * Math.pow(2, (Number(midiNote) - 69) / 12);
@@ -243,11 +248,40 @@
 
   function scheduleLoop(baseStart) {
     if (!playing || !snapshot) return;
+    if (pendingRuntimeState) {
+      snapshot = pendingRuntimeState;
+      passSnapshots = [snapshot];
+      pendingRuntimeState = null;
+    }
     const ctx = ensureContext();
     const pass = passSnapshots?.length
       ? passSnapshots[loopPassIndex % passSnapshots.length]
       : snapshot;
     loopPassIndex += 1;
+
+    const melodyBarCount = Math.max(1, Math.round((Number(pass.loopSixteenths) || 16) / 16));
+    const melodyBarSeconds = Math.max(.05, Number(pass.loopSeconds) / melodyBarCount);
+    const isBarScheduledMelody = pass.arpTone && pass.view !== "arp";
+
+    if (isBarScheduledMelody) {
+      const firstStep = (melodyBarIndex % melodyBarCount) * 16;
+      const finalStep = firstStep + 16;
+      const barOffsetSeconds = firstStep * (Number(pass.loopSeconds) / Math.max(1, Number(pass.loopSixteenths) || 16));
+      for (const event of pass.events) {
+        const offset = Number(event?.offsetSixteenths);
+        if (!Number.isFinite(offset) || offset < firstStep || offset >= finalStep) continue;
+        scheduleSweetInternalVoice(
+          ctx,
+          master,
+          { ...event, offsetSeconds: Math.max(0, Number(event.offsetSeconds) - barOffsetSeconds) },
+          baseStart,
+          pass.effectsReleaseSeconds
+        );
+      }
+      schedulePlayheadFollower(ctx, baseStart, pass, firstStep, 16);
+      melodyBarIndex = (melodyBarIndex + 1) % melodyBarCount;
+      return melodyBarSeconds;
+    }
 
     if (pass.arpTone) {
       for (const event of pass.events) {
@@ -262,6 +296,31 @@
     } else {
       scheduleSynthPhrase(ctx, master, baseStart);
     }
+    schedulePlayheadFollower(ctx, baseStart, pass);
+    return pass.loopSeconds;
+  }
+
+  function clearPlayheadFollower() {
+    for (const timer of playheadTimers) window.clearTimeout(timer);
+    playheadTimers = [];
+  }
+
+  function schedulePlayheadFollower(ctx, baseStart, state, firstStep = 0, stepCount = null) {
+    const totalSixteenths = Math.max(1, Math.round(Number(state?.loopSixteenths) || 1));
+    const steps = Math.max(1, Math.round(stepCount ?? totalSixteenths));
+    const sixteenth = Math.max(.01, Number(state?.loopSeconds) / totalSixteenths);
+    for (let step = 0; step < steps; step += 1) {
+      const delay = Math.max(0, (baseStart - ctx.currentTime + step * sixteenth) * 1000);
+      playheadTimers.push(window.setTimeout(() => {
+        try {
+          window.top?.InterPhaceRuntimeHost?.arpPlayhead?.({
+            mode: state.view === "arp" ? "arp" : "melody",
+            phrase: state.phrase,
+            step: firstStep + step,
+          });
+        } catch (_) {}
+      }, delay));
+    }
   }
 
   function schedulerTick() {
@@ -269,12 +328,12 @@
     const horizon = context.currentTime + LOOKAHEAD_SECONDS;
 
     while (nextLoopStart <= horizon) {
-      scheduleLoop(nextLoopStart);
-      nextLoopStart += snapshot.loopSeconds;
+      nextLoopStart += scheduleLoop(nextLoopStart);
     }
   }
 
   function stop() {
+    const wasUsingPitchedEngine = runtimeUsesPitchedEngine;
     generation += 1;
     playing = false;
     rendering = false;
@@ -282,6 +341,9 @@
     passSnapshots = null;
     loopPassIndex = 0;
     synthBuffers = null;
+    runtimeUsesPitchedEngine = false;
+    pendingRuntimeState = null;
+    clearPlayheadFollower();
 
     if (scheduler) {
       clearInterval(scheduler);
@@ -298,13 +360,16 @@
     }
 
     master = null;
+    if (wasUsingPitchedEngine) {
+      window.top?.InterPhaceRuntimeHost?.pitched?.().then(api => api?.stop?.()).catch(() => {});
+    }
     setButtonState();
   }
 
-  async function play() {
+  async function play(stateOverride = null) {
     stop();
 
-    const state = window.ArpPhaceAuditionState?.snapshot?.();
+    const state = stateOverride || window.ArpPhaceAuditionState?.snapshot?.();
     if (!state || !["arp","melody","chance"].includes(state.view)) return null;
     if (!Number.isFinite(state.loopSeconds) || state.loopSeconds <= 0) return null;
 
@@ -317,6 +382,7 @@
 
     const ctx = ensureContext();
     await ctx.resume();
+    window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "aP-context-ready", childAudioTime: ctx.currentTime, arpTone: !!state.arpTone });
 
     generation += 1;
     const playGeneration = generation;
@@ -324,6 +390,7 @@
     rendering = !state.arpTone;
     snapshot = state;
     loopPassIndex = 0;
+    melodyBarIndex = 0;
 
     master = ctx.createGain();
     const synthMixerGain =
@@ -341,9 +408,12 @@
       rendering = false;
       setButtonState();
 
-      nextLoopStart = ctx.currentTime + START_LEAD_SECONDS;
-      scheduleLoop(nextLoopStart);
-      nextLoopStart += state.loopSeconds;
+      const requestedDelay = Math.max(START_LEAD_SECONDS, Number(state?.runtimeEntry?.startDelay) || 0);
+      const targetEpochMs = Number(state?.runtimeEntry?.transportStartEpochMs);
+      const remainingDelay = Number.isFinite(targetEpochMs) ? Math.max(.02, (targetEpochMs - Date.now()) / 1000) : requestedDelay;
+      nextLoopStart = ctx.currentTime + remainingDelay;
+      window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "aP-step-zero-armed", childAudioTime: ctx.currentTime, childStartAt: nextLoopStart, requestedDelay, remainingDelay, expectedEpochMs: Number(state?.runtimeEntry?.transportStartEpochMs) || null, arpTone: !!state.arpTone });
+      nextLoopStart += scheduleLoop(nextLoopStart);
 
       scheduler = window.setInterval(schedulerTick, SCHEDULER_MS);
       return state;
@@ -361,8 +431,82 @@
     return play();
   }
 
+  async function startLive(state, synthState) {
+    stop();
+    if (!state || !Number.isFinite(state.loopSeconds) || state.loopSeconds <= 0) return null;
+    runtimeSynthState = synthState || runtimeSynthState;
+    if (state.arpTone) return play(state);
+
+    const pitched = await window.top?.InterPhaceRuntimeHost?.pitched?.();
+    if (!pitched || !runtimeSynthState) throw new Error("Persistent synth runtime is unavailable for arpPhace.");
+    const ctx = ensureContext();
+    await ctx.resume();
+    generation += 1;
+    playing = true;
+    rendering = false;
+    runtimeUsesPitchedEngine = true;
+    snapshot = state;
+    passSnapshots = [state];
+    master = null;
+    await pitched.startArp({
+      sequence: state,
+      synthState: runtimeSynthState,
+      runtimeEntry: state.runtimeEntry,
+    });
+    const requestedDelay = Math.max(START_LEAD_SECONDS, Number(state?.runtimeEntry?.startDelay) || 0);
+    const targetEpochMs = Number(state?.runtimeEntry?.transportStartEpochMs);
+    const remainingDelay = Number.isFinite(targetEpochMs) ? Math.max(.02, (targetEpochMs - Date.now()) / 1000) : requestedDelay;
+    nextLoopStart = ctx.currentTime + remainingDelay;
+    schedulePlayheadFollower(ctx, nextLoopStart, state);
+    scheduler = window.setInterval(() => {
+      if (!playing || !snapshot) return;
+      const horizon = ctx.currentTime + LOOKAHEAD_SECONDS;
+      while (nextLoopStart + snapshot.loopSeconds <= horizon) {
+        nextLoopStart += snapshot.loopSeconds;
+        if (pendingRuntimeState) {
+          snapshot = pendingRuntimeState;
+          pendingRuntimeState = null;
+        }
+        schedulePlayheadFollower(ctx, nextLoopStart, snapshot);
+      }
+    }, SCHEDULER_MS);
+    setButtonState();
+    return state;
+  }
+
+  function updateLive(state, synthState) {
+    if (!state) return;
+    runtimeSynthState = synthState || runtimeSynthState;
+    pendingRuntimeState = state;
+    if (runtimeUsesPitchedEngine && runtimeSynthState) {
+      window.top?.InterPhaceRuntimeHost?.pitched?.()
+        .then(api => api?.updateArp?.({ sequence: state, synthState: runtimeSynthState }))
+        .catch(console.error);
+    }
+  }
+
+  async function prepareLive() {
+    const ctx = ensureContext();
+    if (ctx.state === "suspended") await ctx.resume();
+    window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "aP-prepared", childAudioTime: ctx.currentTime });
+  }
+
+  function updateSynthLive(synthState) {
+    runtimeSynthState = synthState || runtimeSynthState;
+    if (runtimeUsesPitchedEngine && snapshot && runtimeSynthState) {
+      window.top?.InterPhaceRuntimeHost?.pitched?.()
+        .then(api => api?.updateArp?.({ sequence: pendingRuntimeState || snapshot, synthState: runtimeSynthState }))
+        .catch(console.error);
+    }
+  }
+
   document.getElementById("shellAudition")?.addEventListener("click", async () => {
     try {
+      const state = window.ArpPhaceLiveState?.snapshot?.();
+      if (window.top !== window && window.InterPhaceShell?.runtime && state) {
+        window.InterPhaceShell.runtime.requestStart("arpPhace", state);
+        return;
+      }
       await toggle();
     } catch (error) {
       console.error("arpPhace audition failed:", error);
@@ -462,5 +606,22 @@
     getAuditionState: () => rendering ? "rendering" : playing ? "playing" : "idle",
     isPlaying: () => playing && !rendering,
     isRendering: () => rendering,
+  });
+
+  window.ArpPhaceLiveAPI = Object.freeze({
+    prepare: prepareLive,
+    start: startLive,
+    update: updateLive,
+    updateSynth: updateSynthLive,
+    globalMelody: () => window.ArpPhaceLiveState?.globalMelody?.() || null,
+    globalMelodyBar: (phrase, bar) => window.ArpPhaceAuditionState?.globalMelodyBarSnapshot?.(phrase, bar) || null,
+    scheduleRootToneEvent({ context, destination, startTime, event, effectsReleaseSeconds }) {
+      if (!context || !destination || !event) return;
+      // Root has already converted this event to its absolute audio start.
+      // The established aP voice normally adds offsetSeconds itself, so clear
+      // it here to avoid applying the musical offset twice.
+      scheduleSweetInternalVoice(context, destination, { ...event, offsetSeconds: 0 }, startTime, Math.max(.01, Number(effectsReleaseSeconds) || .03));
+    },
+    stop,
   });
 })();

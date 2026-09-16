@@ -2,7 +2,7 @@
 
 ## Current position — Build 293
 
-The migrated synth engine is substantially operational. Carrier/harmonics, FM, behavior/character, texture/transient, envelope, filters/EQ, effects, preset adaptation, scale-aware harmony handling and offline audition are wired. The frozen `synthPhace-legacy` package remains the reference for migration truth.
+The migrated synth engine is substantially operational. Carrier/harmonics, FM, behavior/character, texture/transient, envelope, filters/EQ, effects, preset adaptation, scale-aware harmony handling and offline audition are wired.
 
 ## Near-term work
 

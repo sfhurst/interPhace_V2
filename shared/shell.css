@@ -8,6 +8,13 @@
   --shell-font: Arial, Helvetica, sans-serif;
 }
 
+/* Canonical live-grid follower. A playhead is the same physical grid part in
+   every Phace: preserve the cell's own state and mark only its border. */
+.stepBtn.interPhaceGridPlayhead {
+  border-color: #f2f3f5 !important;
+  box-shadow: inset 0 0 0 2px #f2f3f5 !important;
+}
+
 html,
 body {
   width: 100%;
@@ -99,6 +106,12 @@ select,
   background: transparent;
   color: var(--shell-accent, #8d939c);
   cursor: pointer;
+}
+
+/* A hosted live session owns the top control's identity across Phace UIs. */
+.auditionBtn[data-runtime-session="true"] {
+  color: var(--shell-accent, #8d939c) !important;
+  border-color: var(--shell-accent, #8d939c) !important;
 }
 
 .shell-audition[disabled] {

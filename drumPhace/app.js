@@ -1802,8 +1802,13 @@ function loadLocalState() {
 
 function saveLocalState() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    const snapshot = {
       version: 1,
+      // The persistent dP engine lives in a 1px hidden iframe, where its
+      // media query always reports the phone layout.  Preserve the width of
+      // the visible source grid so local audition reads the same four or
+      // eight bars the user is looking at.
+      visibleColumns: visibleCols,
       currentPage,
       currentView,
       labelMode,
@@ -1816,7 +1821,9 @@ function saveLocalState() {
       patterns: patternState,
       variationPages: { ...chancePageIndex },
       variations: variationState,
-    }));
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    window.InterPhaceShell?.runtime?.publishState("drumPhace", { version: 1, snapshot });
   } catch (error) {
     console.warn("Could not save drumPhace state", error);
   }
@@ -2986,6 +2993,15 @@ let auditionAudioContext = null;
 let auditionGeneration = 0;
 let auditionState = "idle";
 let auditionMode = "active";
+let liveDrumTimer = null;
+let liveDrumMaster = null;
+let liveDrumNextStep = 0;
+let liveDrumStartedAt = 0;
+let liveDrumGlobalSequence = null;
+let liveDrumGlobalMixer = null;
+let liveDrumLocalColumns = 4;
+const LIVE_DRUM_LOOKAHEAD_SECONDS = 0.10;
+const LIVE_DRUM_TICK_MS = 25;
 
 function notifyAuditionState() {
   window.dispatchEvent(new CustomEvent("interPhace:audition-state"));
@@ -3002,6 +3018,23 @@ window.addEventListener("beforeunload", stopAudition, { once: true });
 
 function stopAudition() {
   auditionGeneration += 1;
+
+  if (liveDrumTimer !== null) {
+    window.clearInterval(liveDrumTimer);
+    liveDrumTimer = null;
+  }
+  liveDrumGlobalSequence = null;
+  liveDrumGlobalMixer = null;
+  liveDrumLocalColumns = visibleCols;
+  if (liveDrumMaster && auditionAudioContext) {
+    const now = auditionAudioContext.currentTime;
+    liveDrumMaster.gain.cancelScheduledValues(now);
+    liveDrumMaster.gain.setValueAtTime(liveDrumMaster.gain.value, now);
+    liveDrumMaster.gain.linearRampToValueAtTime(0, now + 0.03);
+    const master = liveDrumMaster;
+    window.setTimeout(() => { try { master.disconnect(); } catch (_) {} }, 60);
+    liveDrumMaster = null;
+  }
 
   const source = auditionSource;
   const gain = auditionGain;
@@ -3029,6 +3062,7 @@ function stopAudition() {
   }
 
   auditionState = "idle";
+  clearLiveDrumPlayhead();
   notifyAuditionState();
   auditionBtn.disabled = false;
   auditionMode = "active";
@@ -3528,7 +3562,7 @@ function resolvedRepeatEvents(type, row, col) {
   return DRUM_REPEAT_PRESETS[key]?.events || [{ offset: 0, gain: 1 }];
 }
 
-async function renderCurrentHatVoiceBuffer(sampleRate = 44100) {
+async function renderCurrentHatVoiceBuffer(sampleRate = 44100, strength = 1) {
   const decaySeconds = Math.max(0.008, Math.min(0.140, (Number(drumSynthUiState.hat[5]) || 32) / 1000));
   const duration = Math.max(0.060, Math.min(0.180, decaySeconds + 0.040));
   const frames = Math.ceil(duration * sampleRate);
@@ -3536,11 +3570,11 @@ async function renderCurrentHatVoiceBuffer(sampleRate = 44100) {
   const gain = offline.createGain();
   gain.gain.value = 1;
   gain.connect(offline.destination);
-  hatVoice(offline, gain, 0, 1);
+  hatVoice(offline, gain, 0, strength);
   return await offline.startRendering();
 }
 
-async function renderCurrentSnareVoiceBuffer(sampleRate = 44100) {
+async function renderCurrentSnareVoiceBuffer(sampleRate = 44100, strength = 1) {
   const decayMacro = Math.max(0, Math.min(1, (Number(drumSynthUiState.snare[4]) || 50) / 100));
   const ringMacro = Math.max(0, Math.min(1, (Number(drumSynthUiState.snare[5]) || 0) / 100));
   const noiseDecay = 0.060 + decayMacro * 0.150;
@@ -3551,11 +3585,11 @@ async function renderCurrentSnareVoiceBuffer(sampleRate = 44100) {
   const gain = offline.createGain();
   gain.gain.value = 1;
   gain.connect(offline.destination);
-  snareVoice(offline, gain, 0, 1);
+  snareVoice(offline, gain, 0, strength);
   return await offline.startRendering();
 }
 
-async function renderCurrentKickVoiceBuffer(sampleRate = 44100) {
+async function renderCurrentKickVoiceBuffer(sampleRate = 44100, strength = 1) {
   const decaySeconds = Math.max(0.060, Math.min(1.800, (Number(drumSynthUiState.kick[3]) || 420) / 1000));
   const duration = Math.max(0.120, Math.min(1.880, decaySeconds + 0.060));
   const frames = Math.ceil(duration * sampleRate);
@@ -3563,8 +3597,187 @@ async function renderCurrentKickVoiceBuffer(sampleRate = 44100) {
   const gain = offline.createGain();
   gain.gain.value = 1;
   gain.connect(offline.destination);
-  kickVoice(offline, gain, 0, 1);
+  kickVoice(offline, gain, 0, strength);
   return await offline.startRendering();
+}
+
+// Build 621: native drum voices are deterministic between synth edits.  Keep
+// one normal and one ghost-strength render for each built-in instrument, then
+// use cheap BufferSource triggers during live playback.  Chance, per-cell
+// volume, repeat gain, mixer gain, swing, and root timing remain event work.
+const DRUM_CACHE_SAMPLE_RATE = 44100;
+const DRUM_CACHE_REBUILD_DELAY_MS = 120;
+const builtInDrumVoiceCache = Object.fromEntries(instruments.map(type => [type, {
+  key: null,
+  normal: null,
+  ghost: null,
+  pendingKey: null,
+  pendingNormal: null,
+  pendingGhost: null,
+  protectUntil: 0,
+  rebuildTimer: null,
+}]));
+let drumCacheBuildQueue = Promise.resolve();
+let drumCacheBackgroundGeneration = 0;
+let drumCacheQueueDepth = 0;
+
+// Build 627 diagnostic-only instrumentation.  These figures measure the
+// browser time spent producing each actual cached buffer; they never change
+// cache order, audio routing, or the buffer-promotion contract.
+function cacheTimingSlot(cache, variant) {
+  if (!cache.cacheTiming) cache.cacheTiming = {};
+  if (!cache.cacheTiming[variant]) cache.cacheTiming[variant] = {};
+  return cache.cacheTiming[variant];
+}
+
+function recordDrumCacheRender(cache, variant, startedAt, buffer) {
+  const slot = cacheTimingSlot(cache, variant);
+  slot.lastRenderMs = Math.round((performance.now() - startedAt) * 100) / 100;
+  slot.completedEpochMs = Date.now();
+  slot.bufferSeconds = buffer?.duration ?? null;
+  slot.frames = buffer?.length ?? null;
+}
+
+function drumCacheDiagnostics() {
+  const voices = {};
+  for (const type of instruments) {
+    const cache = builtInDrumVoiceCache[type];
+    const key = drumCacheKey(type);
+    voices[type] = {
+      uploadedSample: !!uploadedSamples[type],
+      status: cache?.cacheStatus || "idle",
+      ready: !!cache && cache.key === key && !!cache.normal && !!cache.ghost,
+      pending: !!cache && cache.pendingKey === key && !!cache.pendingNormal && !!cache.pendingGhost,
+      buffered: !!cache && ((cache.key === key && !!cache.normal && !!cache.ghost) || (cache.pendingKey === key && !!cache.pendingNormal && !!cache.pendingGhost)),
+      normal: cache?.cacheTiming?.normal || null,
+      ghost: cache?.cacheTiming?.ghost || null,
+    };
+  }
+  return {
+    backgroundGeneration: drumCacheBackgroundGeneration,
+    queueDepth: drumCacheQueueDepth,
+    voices,
+  };
+}
+
+function drumGhostStrength(type) {
+  return type === "kick" ? 0.42 : type === "snare" ? 0.46 : 0.50;
+}
+
+function drumCacheKey(type) {
+  return JSON.stringify(drumSynthUiState[type] || []);
+}
+
+function renderBuiltInDrumVoice(type, strength) {
+  if (type === "kick") return renderCurrentKickVoiceBuffer(DRUM_CACHE_SAMPLE_RATE, strength);
+  if (type === "snare") return renderCurrentSnareVoiceBuffer(DRUM_CACHE_SAMPLE_RATE, strength);
+  return renderCurrentHatVoiceBuffer(DRUM_CACHE_SAMPLE_RATE, strength);
+}
+
+async function rebuildBuiltInDrumVoiceCache(type, key = drumCacheKey(type)) {
+  const cache = builtInDrumVoiceCache[type];
+  if (!cache || uploadedSamples[type] || key !== drumCacheKey(type)) return;
+  cache.cacheStatus = "rendering-normal";
+  const normalStartedAt = performance.now();
+  const normal = await renderBuiltInDrumVoice(type, 1);
+  recordDrumCacheRender(cache, "normal", normalStartedAt, normal);
+  if (key !== drumCacheKey(type) || uploadedSamples[type]) { cache.cacheStatus = "discarded"; return; }
+  cache.cacheStatus = "rendering-ghost";
+  const ghostStartedAt = performance.now();
+  const ghost = await renderBuiltInDrumVoice(type, drumGhostStrength(type));
+  recordDrumCacheRender(cache, "ghost", ghostStartedAt, ghost);
+  if (key !== drumCacheKey(type) || uploadedSamples[type]) { cache.cacheStatus = "discarded"; return; }
+  cache.pendingKey = key;
+  cache.pendingNormal = normal;
+  cache.pendingGhost = ghost;
+  cache.cacheStatus = "pending-promotion";
+}
+
+function requestBuiltInDrumVoiceCache(type, { immediate = false, background = false } = {}) {
+  const cache = builtInDrumVoiceCache[type];
+  if (!cache || uploadedSamples[type]) return;
+  const key = drumCacheKey(type);
+  if (cache.key === key || cache.pendingKey === key) return;
+  if (cache.rebuildTimer !== null) window.clearTimeout(cache.rebuildTimer);
+  cache.cacheStatus = "scheduled";
+  const backgroundGeneration = drumCacheBackgroundGeneration;
+  const begin = () => {
+    cache.rebuildTimer = null;
+    drumCacheBuildQueue = drumCacheBuildQueue
+      .catch(() => {})
+      .then(async () => {
+        // Idle warming must yield before it starts another render. A render
+        // already inside OfflineAudioContext is allowed to finish silently,
+        // but no queued warm job may begin after user activity/playback.
+        if (background && backgroundGeneration !== drumCacheBackgroundGeneration) {
+          cache.cacheStatus = "cancelled";
+          return;
+        }
+        drumCacheQueueDepth += 1;
+        try {
+          await rebuildBuiltInDrumVoiceCache(type, key);
+        } finally {
+          drumCacheQueueDepth = Math.max(0, drumCacheQueueDepth - 1);
+        }
+      })
+      .catch(error => console.warn(`Could not cache ${type} voice`, error));
+  };
+  if (immediate) begin();
+  else cache.rebuildTimer = window.setTimeout(begin, DRUM_CACHE_REBUILD_DELAY_MS);
+}
+
+function requestAllBuiltInDrumVoiceCaches({ immediate = false, background = false } = {}) {
+  instruments.forEach(type => requestBuiltInDrumVoiceCache(type, { immediate, background }));
+}
+
+function cancelBackgroundDrumCacheWork() {
+  drumCacheBackgroundGeneration += 1;
+  instruments.forEach(type => {
+    const cache = builtInDrumVoiceCache[type];
+    if (!cache || cache.rebuildTimer === null) return;
+    window.clearTimeout(cache.rebuildTimer);
+    cache.rebuildTimer = null;
+    cache.cacheStatus = "cancelled";
+  });
+}
+
+function cachedBuiltInDrumVoice(type, state, context, secondsPerStep) {
+  const cache = builtInDrumVoiceCache[type];
+  if (!cache || uploadedSamples[type]) return null;
+  const wantedKey = drumCacheKey(type);
+  if (cache.pendingKey === wantedKey && cache.pendingNormal && cache.pendingGhost) {
+    // A cold, idle-prewarmed cache has no audible predecessor to protect.
+    // Promote it on its first solo or root/iP hit.  Four-step protection is
+    // reserved for an edited replacement when a complete older pair exists.
+    const hasOlderActivePair = !!cache.normal && !!cache.ghost;
+    if (hasOlderActivePair && !cache.protectUntil) {
+      cache.protectUntil = context.currentTime + (Math.max(0, secondsPerStep) * 4);
+    }
+    if (!hasOlderActivePair || context.currentTime >= cache.protectUntil) {
+      cache.key = cache.pendingKey;
+      cache.normal = cache.pendingNormal;
+      cache.ghost = cache.pendingGhost;
+      cache.pendingKey = null;
+      cache.pendingNormal = null;
+      cache.pendingGhost = null;
+      cache.protectUntil = 0;
+      cache.cacheStatus = "ready";
+    }
+  }
+  if (cache.key !== wantedKey) {
+    requestBuiltInDrumVoiceCache(type);
+    // A synth edit must not alter the next four steps.  Keep using the last
+    // complete buffer while the replacement is rendered, then promote only
+    // after that protected musical window.
+    if (cache.normal) {
+      if (!cache.protectUntil) cache.protectUntil = context.currentTime + (Math.max(0, secondsPerStep) * 4);
+      return state === "ghost"
+        ? { buffer: cache.ghost, unitStrength: drumGhostStrength(type) }
+        : { buffer: cache.normal, unitStrength: 1 };
+    }
+    return null;
+  }
+  return state === "ghost" ? { buffer: cache.ghost, unitStrength: drumGhostStrength(type) } : { buffer: cache.normal, unitStrength: 1 };
 }
 
 function scheduleVisiblePatternVoice(offline, destination, type, secondsPerStep, swingPercent = 0, channelGain = 1, renderCols = visibleCols, renderedVoiceBuffer = null, sourceColumns = null) {
@@ -3824,7 +4037,218 @@ window.DrumPhaceRenderAPI = Object.freeze({
   },
 });
 
+function clearLiveDrumPlayhead() {
+  document.querySelectorAll(".stepBtn.interPhaceGridPlayhead").forEach(button => {
+    button.classList.remove("interPhaceGridPlayhead");
+    button.style.removeProperty("box-shadow");
+  });
+}
+
+let rootTransportRunning = false;
+let lastRootGridDiagnosticKey = null;
+let lastRootTransportMessageKey = null;
+
+function recordRootGridDiagnostic(clock, detail) {
+  const key = `${clock?.generation}:${clock?.step}:${detail.mode}:${detail.row}:${detail.col}`;
+  if (key === lastRootGridDiagnosticKey) return;
+  lastRootGridDiagnosticKey = key;
+  const appliedEpochMs = Date.now();
+  window.InterPhaceShell?.runtime?.reportDiagnostic?.("drumPhace", {
+    stage: "dP-grid-applied",
+    rootStep: clock?.step ?? null,
+    rootBar: clock?.bar ?? null,
+    rootStepInBar: clock?.stepInBar ?? null,
+    rootAudioTime: clock?.now ?? null,
+    childAudioTime: auditionAudioContext?.currentTime ?? null,
+    page: currentPage,
+    view: currentView,
+    visibleCols,
+    scheduledEpochMs: clock?.scheduledEpochMs ?? null,
+    appliedEpochMs,
+    applyLatencyMs: Number.isFinite(Number(clock?.scheduledEpochMs)) ? appliedEpochMs - Number(clock.scheduledEpochMs) : null,
+    visibilityState: document.visibilityState,
+    childPerformanceMs: Math.round(performance.now()),
+    ...detail,
+  });
+  const reportFrame = frame => {
+    const actual = Array.from(document.querySelectorAll(".stepBtn.interPhaceGridPlayhead")).map(cell => ({ row: Number(cell.dataset.row), col: Number(cell.dataset.col) }));
+    const cells = Array.from(document.querySelectorAll(".stepBtn.interPhaceGridPlayhead"));
+    const paintedEpochMs = Date.now();
+    window.InterPhaceShell?.runtime?.reportDiagnostic?.("drumPhace", {
+      stage: "dP-grid-frame", frame, rootStep: clock?.step ?? null,
+      expectedMode: detail.mode, expectedRow: detail.row, expectedCol: detail.col,
+      actual, page: currentPage, view: currentView, visibilityState: document.visibilityState,
+      scheduledEpochMs: clock?.scheduledEpochMs ?? null, paintedEpochMs,
+      paintLatencyMs: Number.isFinite(Number(clock?.scheduledEpochMs)) ? paintedEpochMs - Number(clock.scheduledEpochMs) : null,
+      paintedStyles: cells.map(cell => { const style = getComputedStyle(cell); return { row: Number(cell.dataset.row), col: Number(cell.dataset.col), borderColor: style.borderColor, boxShadow: style.boxShadow, opacity: style.opacity, width: cell.getBoundingClientRect().width, height: cell.getBoundingClientRect().height }; }),
+      childPerformanceMs: Math.round(performance.now()),
+    });
+  };
+  requestAnimationFrame(() => { reportFrame(1); requestAnimationFrame(() => reportFrame(2)); });
+}
+
+document.addEventListener("visibilitychange", () => window.InterPhaceShell?.runtime?.reportDiagnostic?.("drumPhace", {
+  stage: "dP-visibility", visibilityState: document.visibilityState, childPerformanceMs: Math.round(performance.now()),
+}));
+
+function showLiveDrumPlayhead(step) {
+  clearLiveDrumPlayhead();
+  const row = step % ROWS, col = Math.floor(step / ROWS);
+  document.querySelectorAll(`.stepBtn[data-row="${row}"][data-col="${col}"]`).forEach(button => {
+    button.classList.add("interPhaceGridPlayhead");
+  });
+}
+
+function scheduleLiveDrumHit(type, row, col, startTime, secondsPerStep, mixer) {
+  const cell = patternState[type]?.[row]?.[col];
+  if (!cell || cell === "off") return;
+  const variation = resolveDrumAudioVariation(type, row, col);
+  if (!variation.play) return;
+  const ghostStrength = type === "kick" ? .42 : type === "snare" ? .46 : .50;
+  const baseStrength = (cell === "ghost" ? ghostStrength : 1) * variation.volumeMultiplier * (mixer[type]?.gain ?? 1);
+  if (baseStrength <= 0) return;
+  const voice = auditionVoices[type], sample = uploadedSamples[type];
+  const cachedVoice = !sample
+    ? cachedBuiltInDrumVoice(type, cell, auditionAudioContext, secondsPerStep)
+    : null;
+  for (const repeat of resolvedRepeatEvents(type, row, col)) {
+    const strength = baseStrength * Math.max(0, Number(repeat.gain) || 0);
+    if (strength <= 0) continue;
+    const when = startTime + Math.max(0, Number(repeat.offset) || 0) * secondsPerStep;
+    if (sample) scheduleUploadedSample(auditionAudioContext, liveDrumMaster, sample, when, strength);
+    else if (cachedVoice?.buffer) scheduleUploadedSample(auditionAudioContext, liveDrumMaster, cachedVoice.buffer, when, strength / cachedVoice.unitStrength);
+    else voice(auditionAudioContext, liveDrumMaster, when, strength);
+  }
+}
+
+// Global iP playback supplies the root context and its one authoritative
+// musical time.  Keep the proven dP hit construction intact; only the clock
+// and destination belong to the persistent root host.
+function scheduleRootDrumHit(context, destination, type, row, col, startTime, secondsPerStep, mixer) {
+  const cell = patternState[type]?.[row]?.[col];
+  if (!cell || cell === "off") return;
+  const variation = resolveDrumAudioVariation(type, row, col);
+  if (!variation.play) return;
+  const ghostStrength = type === "kick" ? .42 : type === "snare" ? .46 : .50;
+  const baseStrength = (cell === "ghost" ? ghostStrength : 1) * variation.volumeMultiplier * (mixer[type]?.gain ?? 1);
+  if (baseStrength <= 0) return;
+  const voice = auditionVoices[type], sample = uploadedSamples[type];
+  const cachedVoice = !sample
+    ? cachedBuiltInDrumVoice(type, cell, context, secondsPerStep)
+    : null;
+  for (const repeat of resolvedRepeatEvents(type, row, col)) {
+    const strength = baseStrength * Math.max(0, Number(repeat.gain) || 0);
+    if (strength <= 0) continue;
+    const when = startTime + Math.max(0, Number(repeat.offset) || 0) * secondsPerStep;
+    if (sample) scheduleUploadedSample(context, destination, sample, when, strength);
+    else if (cachedVoice?.buffer) scheduleUploadedSample(context, destination, cachedVoice.buffer, when, strength / cachedVoice.unitStrength);
+    else voice(context, destination, when, strength);
+  }
+}
+
+function scheduleRootDrumStep({ context, destination, absoluteStep, startTime, secondsPerStep, sequence, mixer }) {
+  const columns = Math.max(1, Array.isArray(sequence) ? sequence.length : 0);
+  const step = Math.max(0, Math.floor(Number(absoluteStep) || 0)) % (columns * ROWS);
+  const row = step % ROWS, sequenceColumn = Math.floor(step / ROWS);
+  instruments.forEach(type => {
+    const sourceColumn = Number(sequence?.[sequenceColumn]?.[type]) - 1;
+    if (Number.isInteger(sourceColumn) && sourceColumn >= 0 && sourceColumn < MAX_COLS) {
+      scheduleRootDrumHit(context, destination, type, row, sourceColumn, startTime, secondsPerStep, mixer || {});
+    }
+  });
+}
+
+function scheduleRootLocalDrumStep({ context, destination, absoluteStep, startTime, secondsPerStep, state }) {
+  const snapshot = state?.snapshot || {};
+  const columns = Math.max(1, Math.min(MAX_COLS, Math.round(Number(snapshot.visibleColumns) || visibleCols)));
+  const step = Math.max(0, Math.floor(Number(absoluteStep) || 0)) % (columns * ROWS);
+  const row = step % ROWS, col = Math.floor(step / ROWS);
+  const types = snapshot.currentView === "synth" ? [snapshot.currentPage] : instruments;
+  const mixer = readDrumMixerGains({ respectMute: false });
+  types.forEach(type => {
+    if (instruments.includes(type)) scheduleRootDrumHit(context, destination, type, row, col, startTime, secondsPerStep, mixer);
+  });
+}
+
+function scheduleLiveDrumStep(absoluteStep, startTime, secondsPerStep) {
+  const sequence = liveDrumGlobalSequence;
+  const isGlobal = !!sequence;
+  const columns = sequence?.length || liveDrumLocalColumns;
+  const totalSteps = columns * ROWS;
+  const step = absoluteStep % totalSteps, row = step % ROWS, sequenceColumn = Math.floor(step / ROWS);
+  // Local dP belongs to its active view. Hosted iP belongs only to iP's
+  // selected K/S/H source columns and iP's mixer/mutes; dP's visible page
+  // must never narrow or silence that global kit.
+  const mixer = isGlobal ? liveDrumGlobalMixer : readDrumMixerGains({ respectMute: false });
+  const types = isGlobal ? instruments : (currentView === "synth" ? [currentPage] : instruments);
+  types.forEach(type => {
+    const sourceColumn = sequence ? Number(sequence[sequenceColumn]?.[type]) - 1 : sequenceColumn;
+    if (Number.isInteger(sourceColumn) && sourceColumn >= 0 && sourceColumn < MAX_COLS) scheduleLiveDrumHit(type, row, sourceColumn, startTime, secondsPerStep, mixer);
+  });
+  const delay = Math.max(0, (startTime - auditionAudioContext.currentTime) * 1000);
+  window.setTimeout(() => {
+    if (auditionState !== "playing") return;
+    if (window.top !== window && window.top.InterPhaceRuntimeHost?.drumPlayhead) window.top.InterPhaceRuntimeHost.drumPlayhead(step);
+    else showLiveDrumPlayhead(step);
+  }, delay);
+}
+
+async function startLiveDrumAudition(mode = "active", sequence = null, mixer = null, startDelay = null, sourceSnapshot = null, runtimeEntry = null) {
+  if (auditionState !== "idle") return;
+  if (!auditionAudioContext) auditionAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+  if (auditionAudioContext.state === "suspended") await auditionAudioContext.resume();
+  window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "dP-context-ready", childAudioTime: auditionAudioContext.currentTime });
+  auditionMode = mode; auditionState = "playing";
+  liveDrumMaster = auditionAudioContext.createGain();
+  liveDrumMaster.gain.setValueAtTime(0, auditionAudioContext.currentTime);
+  liveDrumMaster.gain.linearRampToValueAtTime(1, auditionAudioContext.currentTime + .015);
+  liveDrumMaster.connect(auditionAudioContext.destination);
+  const tempo = clampTempo(readGlobalProjectTempo());
+  const swing = Math.max(0, Math.min(100, Number(readGlobalProjectSwing()) || 0));
+  liveDrumGlobalSequence = Array.isArray(sequence) && sequence.length ? sequence : null;
+  liveDrumGlobalMixer = liveDrumGlobalSequence ? mixer : null;
+  const sourceVisibleColumns = Math.max(
+    1,
+    Math.min(MAX_COLS, Math.round(Number(sourceSnapshot?.visibleColumns) || visibleCols))
+  );
+  liveDrumLocalColumns = sourceVisibleColumns;
+  const secondsPerStep = (60 / tempo) / 4, totalSteps = (liveDrumGlobalSequence?.length || sourceVisibleColumns) * ROWS;
+  const requestedDelay = Math.max(.02, Number(startDelay) || .05);
+  const targetEpochMs = Number(runtimeEntry?.transportStartEpochMs);
+  const entryDelay = Number.isFinite(targetEpochMs)
+    ? Math.max(.02, (targetEpochMs - Date.now()) / 1000)
+    : requestedDelay;
+  liveDrumStartedAt = auditionAudioContext.currentTime + entryDelay; liveDrumNextStep = 0;
+  window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "dP-step-zero-armed", childAudioTime: auditionAudioContext.currentTime, childStartAt: liveDrumStartedAt, requestedDelay, remainingDelay: entryDelay, expectedEpochMs: Number(runtimeEntry?.transportStartEpochMs) || null });
+  const stepTime = index => {
+    const loop = Math.floor(index / totalSteps), inLoop = index % totalSteps;
+    return liveDrumStartedAt + loop * totalSteps * secondsPerStep + window.InterPhaceShell.swungSixteenthTime(inLoop, secondsPerStep, swing);
+  };
+  const tick = () => {
+    if (auditionState !== "playing") return;
+    const horizon = auditionAudioContext.currentTime + LIVE_DRUM_LOOKAHEAD_SECONDS;
+    while (stepTime(liveDrumNextStep) <= horizon) {
+      scheduleLiveDrumStep(liveDrumNextStep, stepTime(liveDrumNextStep), secondsPerStep);
+      liveDrumNextStep += 1;
+    }
+  };
+  tick(); liveDrumTimer = window.setInterval(tick, LIVE_DRUM_TICK_MS);
+  notifyAuditionState(); updateAuditionColor(); auditionBtn.setAttribute("aria-label", "Stop audition");
+}
+
 async function startAudition(mode = "active") {
+  const snapshot = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+  if (window.top !== window && window.InterPhaceShell?.runtime && snapshot) {
+    // Existing saved projects predate visibleColumns.  Stamp it at the
+    // visible source immediately before requesting hosted playback.
+    snapshot.visibleColumns = visibleCols;
+    auditionMode = mode; auditionState = "playing";
+    window.InterPhaceShell.runtime.requestStart("drumPhace", { version: 1, snapshot });
+    notifyAuditionState(); updateAuditionColor();
+    return;
+  }
+  return startLiveDrumAudition(mode);
+
   if (auditionState !== "idle") return;
 
   const generation = ++auditionGeneration;
@@ -3894,6 +4318,69 @@ async function startAudition(mode = "active") {
   }
 }
 
+window.DrumPhaceLiveAPI = Object.freeze({
+  configureRootGlobal(state) {
+    if (!state?.snapshot) return false;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.snapshot));
+    loadLocalState();
+    requestAllBuiltInDrumVoiceCaches();
+    return true;
+  },
+  warmCache() {
+    // Deliberately does not create/resume an audible context or start a
+    // transport. The host invokes this only during genuine idle windows.
+    loadLocalState();
+    requestAllBuiltInDrumVoiceCaches({ background: true });
+  },
+  cacheDiagnostics() {
+    return drumCacheDiagnostics();
+  },
+  cancelWarmCache() {
+    cancelBackgroundDrumCacheWork();
+  },
+  scheduleRootGlobalStep(entry) {
+    if (!entry?.context || !entry?.destination) return;
+    scheduleRootDrumStep(entry);
+  },
+  scheduleRootLocalStep(entry) {
+    if (!entry?.context || !entry?.destination) return;
+    scheduleRootLocalDrumStep(entry);
+  },
+  async prepare() {
+    if (!auditionAudioContext) auditionAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (auditionAudioContext.state === "suspended") await auditionAudioContext.resume();
+    window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "dP-prepared", childAudioTime: auditionAudioContext.currentTime });
+  },
+  async start(state) {
+    if (state?.snapshot) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.snapshot));
+      loadLocalState();
+    }
+    await startLiveDrumAudition("all", null, null, state?.runtimeEntry?.startDelay, state?.snapshot, state?.runtimeEntry);
+  },
+  async startGlobal(state) {
+    if (state?.snapshot) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.snapshot));
+      loadLocalState();
+    }
+    await startLiveDrumAudition("all", state?.sequence, state?.mixer, state?.runtimeEntry?.startDelay, state?.snapshot, state?.runtimeEntry);
+  },
+  update(state) {
+    if (!state?.snapshot) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.snapshot));
+    loadLocalState();
+    requestAllBuiltInDrumVoiceCaches();
+  },
+  setGlobalMixer(mixer) {
+    if (liveDrumGlobalSequence) liveDrumGlobalMixer = mixer || null;
+  },
+  stop() { stopAudition(); },
+});
+
+window.addEventListener("interPhace:runtime-stop", () => {
+  if (auditionState !== "idle") stopAudition();
+});
+
 
 
 // Build 221: drumPhace audition follows the active editing context.
@@ -3942,9 +4429,55 @@ window.addEventListener("storage", (event) => {
 loadLocalState();
 rebuildGrids();
 updateAuditionColor();
+requestAnimationFrame(() => window.InterPhaceShell?.runtime?.reportDiagnostic?.("drumPhace", {
+  stage: "dP-grid-ready", page: currentPage, view: currentView, visibleCols,
+  gridCellCount: document.querySelectorAll(".stepBtn[data-row][data-col]").length,
+  childPerformanceMs: Math.round(performance.now()),
+}));
 
 window.addEventListener("interPhace:drumBorders", () => {
   if (currentView === "pattern") updateOverlaps();
+});
+
+window.addEventListener("message", event => {
+  if (event.origin !== window.location.origin || event.data?.type !== "interPhace:runtime-drum-playhead") return;
+  if (rootTransportRunning) return;
+  showLiveDrumPlayhead(Number(event.data.step) || 0);
+});
+
+// Hosted playback position is owned by the root transport. The drum audio
+// scheduler may look ahead, but it never owns the visible grid position.
+window.addEventListener("message", event => {
+  if (event.origin !== window.location.origin || event.data?.type !== "interPhace:runtime-transport") return;
+  const clock = event.data.transport;
+  const messageKey = `${clock?.generation}:${clock?.step}`;
+  if (messageKey !== lastRootTransportMessageKey) {
+    lastRootTransportMessageKey = messageKey;
+    window.InterPhaceShell?.runtime?.reportDiagnostic?.("drumPhace", {
+      stage: "dP-transport-received", rootStep: clock?.step ?? null, rootBar: clock?.bar ?? null,
+      rootStepInBar: clock?.stepInBar ?? null, page: currentPage, view: currentView,
+      gridCellCount: document.querySelectorAll(".stepBtn[data-row][data-col]").length,
+      childPerformanceMs: Math.round(performance.now()),
+    });
+  }
+  rootTransportRunning = !!clock?.running;
+  if (!rootTransportRunning) { clearLiveDrumPlayhead(); return; }
+  const sequencedDrums = clock?.sequencerSource?.drum;
+  const sequencedColumn = sequencedDrums?.[currentPage];
+  if (sequencedDrums) {
+    if (!Number.isInteger(sequencedColumn) || sequencedColumn >= visibleCols) {
+      recordRootGridDiagnostic(clock, { mode: "sequenced-cleared", row: null, col: null, sequencedColumn });
+      clearLiveDrumPlayhead(); return;
+    }
+    const row = Math.max(0, Number(clock.stepInBar) || 0) % ROWS;
+    recordRootGridDiagnostic(clock, { mode: "sequenced", row, col: sequencedColumn, sequencedColumn });
+    showLiveDrumPlayhead(sequencedColumn * ROWS + row);
+    return;
+  }
+  const steps = Math.max(1, visibleCols * ROWS);
+  const localStep = Math.max(0, Number(clock.step) || 0) % steps;
+  recordRootGridDiagnostic(clock, { mode: "visible-loop", row: localStep % ROWS, col: Math.floor(localStep / ROWS) });
+  showLiveDrumPlayhead(localStep);
 });
 
 const drumShellBinding = window.InterPhaceShell?.bind({
@@ -3954,6 +4487,10 @@ const drumShellBinding = window.InterPhaceShell?.bind({
   line: getComputedStyle(document.documentElement).getPropertyValue("--line").trim() || "#2a2d33",
   text: getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#f0f1f3",
   muted: getComputedStyle(document.documentElement).getPropertyValue("--muted").trim() || "#777d87",
+  getRuntimeAccent: session => {
+    if (session?.phace !== "drumPhace") return null;
+    return { kick: "#ff4b4b", snare: "#66e0b3", hat: "#ffd84d" }[currentPage] || "#ff4b4b";
+  },
   getAuditionState: () => auditionState,
   canSnapshot: () => window.InterPhaceShell?.snapshots?.hasOpenSlot("drumPhace"),
   onSnapshot: () => window.InterPhaceShell?.snapshots?.save("drumPhace", {

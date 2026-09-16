@@ -1,5 +1,9 @@
 # dronePhace Button Map
 
+## Build 645 preset status
+
+Each B1–B4 preset control is bright only when its five macro values exactly match a named preset; otherwise its last selected preset name remains as a dimmed, selectable reference.
+
 **App ID:** `app6`  
 **Role:** sustained tonal ambience / drone bed.
 

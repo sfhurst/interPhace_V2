@@ -104,6 +104,7 @@ let auditionState = "idle";
 let auditionAudioContext = null;
 let auditionTransport = null;
 let auditionGeneration = 0;
+let liveRenderTimer = null;
 
 function notifyAuditionState() {
   window.dispatchEvent(new CustomEvent("interPhace:audition-state"));
@@ -123,6 +124,37 @@ function save() {
   document.querySelectorAll(".macroSlider").forEach(s => values[s.id] = Number(s.value));
   document.querySelectorAll(".presetSlider").forEach(s => presets[s.id] = Number(s.value));
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ activePage, values, presets }));
+  window.InterPhaceShell?.runtime?.publishState("dronePhace", {
+    version: 1,
+    activePage,
+    values,
+    presets,
+    mixer: window.InterPhaceShell?.readMixerChannelGain?.("drone", { respectMute: false }) || { db: 0, muted: false, gain: 1 },
+  });
+}
+
+function liveDroneSessionActive() {
+  return window.top !== window && window.InterPhaceShell?.runtime?.session?.()?.phace === "dronePhace";
+}
+
+function submitLiveDroneRender() {
+  if (!liveDroneSessionActive()) return;
+  const buffer = renderDroneBuffer(SAMPLE_RATE, AUDITION_SECONDS);
+  window.InterPhaceShell.runtime.submitRenderedBed("dronePhace", {
+    left: buffer.getChannelData(0),
+    right: buffer.getChannelData(1),
+    sampleRate: buffer.sampleRate,
+    gain: window.InterPhaceShell.readMixerChannelGain?.("drone", { respectMute: false })?.gain ?? 1,
+  });
+}
+
+function scheduleLiveDroneRender() {
+  if (!liveDroneSessionActive()) return;
+  if (liveRenderTimer) window.clearTimeout(liveRenderTimer);
+  liveRenderTimer = window.setTimeout(() => {
+    liveRenderTimer = null;
+    submitLiveDroneRender();
+  }, 550);
 }
 
 function showPage(page) {
@@ -189,12 +221,36 @@ function presetIndexForCurrentValues(page) {
   );
 }
 
-function syncPresetForPage(page) {
+function refreshPresetStatus(page) {
   const slider = document.getElementById(`app6_b${page}_p1_c6`);
   if (!slider) return;
   const match = presetIndexForCurrentValues(page);
-  if (match >= 0) slider.value = String(match);
-  updateSlider(slider);
+  const presets = PAGE_PRESETS[page] || [];
+  const control = slider.closest(".macroControl");
+  const active = match >= 0;
+  if (active) {
+    slider.value = String(match);
+    updateSlider(slider);
+  } else {
+    // Keep the last selected preset as the dimmed reference point. Macro
+    // values are authoritative, but the visible name identifies the preset
+    // this custom state was shaped from.
+    updateSlider(slider);
+  }
+  control?.classList.toggle("preset-inactive", !active);
+  control?.setAttribute("data-preset-active", active ? "true" : "false");
+  const selected = Math.max(0, Math.min(presets.length - 1, Number(slider.value) || 0));
+  slider.setAttribute("aria-label", active
+    ? `Preset: ${presets[match]?.name || "INIT"}`
+    : `Preset: ${presets[selected]?.name || "INIT"}, modified`);
+}
+
+function syncPresetForPage(page) {
+  refreshPresetStatus(page);
+}
+
+function refreshAllPresetStatuses() {
+  for (let page = 1; page <= 4; page += 1) refreshPresetStatus(page);
 }
 
 function applyPagePreset(page, index) {
@@ -796,6 +852,7 @@ window.DronePhaceRenderAPI = Object.freeze({
 });
 
 function stopAudition() {
+  if (window.top !== window && window.InterPhaceShell?.runtime?.session?.()) window.InterPhaceShell.runtime.requestStop();
   auditionGeneration++;
   auditionTransport?.stop?.();
   auditionTransport = null;
@@ -805,10 +862,32 @@ function stopAudition() {
 
 // Build 484: local audition survives all in-Phace navigation and edits.
 // Leaving this Phace always stops its local audition.
-window.addEventListener("pagehide", stopAudition);
-window.addEventListener("beforeunload", stopAudition, { once: true });
+window.addEventListener("pagehide", () => {
+  auditionGeneration++;
+  auditionTransport?.stop?.();
+  auditionTransport = null;
+  auditionState = "idle";
+});
+window.addEventListener("beforeunload", () => {
+  auditionGeneration++;
+  auditionTransport?.stop?.();
+  auditionTransport = null;
+}, { once: true });
+
+function liveDroneState() {
+  const values = {}, presets = {};
+  document.querySelectorAll(".macroSlider").forEach(s => values[s.id] = Number(s.value));
+  document.querySelectorAll(".presetSlider").forEach(s => presets[s.id] = Number(s.value));
+  return { version: 1, activePage, values, presets, project: readProjectContext(), mixer: window.InterPhaceShell?.readMixerChannelGain?.("drone", { respectMute: false }) || { db: 0, muted: false, gain: 1 } };
+}
 
 async function startAudition() {
+  if (window.top !== window && window.InterPhaceShell?.runtime) {
+    auditionState = "playing";
+    window.InterPhaceShell.runtime.requestStart("dronePhace", liveDroneState());
+    notifyAuditionState();
+    return;
+  }
   const generation = ++auditionGeneration;
   auditionState = "rendering";
   notifyAuditionState();
@@ -845,6 +924,12 @@ async function startAudition() {
 
 function toggleAudition(event) {
   event?.preventDefault();
+  if (window.top !== window && window.InterPhaceShell?.runtime?.session?.()) {
+    window.InterPhaceShell.runtime.requestStop();
+    auditionState = "idle";
+    notifyAuditionState();
+    return;
+  }
   if (auditionState !== "idle") {
     stopAudition();
     return;
@@ -854,6 +939,10 @@ function toggleAudition(event) {
     stopAudition();
   });
 }
+
+window.addEventListener("interPhace:runtime-stop", () => {
+  if (auditionState === "playing") { auditionState = "idle"; notifyAuditionState(); }
+});
 
 applyDefaults();
 loadState();
@@ -875,6 +964,8 @@ document.querySelectorAll(".presetSlider").forEach(s => {
     applyPagePreset(page, Number(s.value));
   });
 });
+
+refreshAllPresetStatuses();
 
 buttons.forEach((b,i) => b.addEventListener("click", () => showPage(i + 1)));
 generateBtn.addEventListener("click", generateCurrentPage);

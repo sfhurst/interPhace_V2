@@ -51,7 +51,6 @@
 - Per-page classes may extend Background Selection Grid styling without changing the shared geometry.
 
 ## synthPhace legacy
-- `synthPhace-legacy/` is frozen reference code. Do not modify it unless explicitly instructed.
 - Legacy IDs and wiring remain intact so old synth logic can be mapped intentionally into the rebuilt live synthPhace.
 
 ## Project documentation
@@ -146,7 +145,7 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 ### Build ZIP packaging and localhost development
 - Development localhost serves the permanent working folder `C:\Users\hurst.audio\Dev\interPhace_main\current\`.
 - Every delivered interPhace build ZIP must be flat at the project-root level: opening the ZIP shows `index.html`, project JavaScript/CSS, Phace folders, documentation, `favicon.ico`, and other project-root files directly.
-- The canonical delivered filename is `interPhace-build-<integer>-<Short-Hyphenated-Description>.zip` (for example, `interPhace-build-520-Drawn-Envelope-Return-Fix.zip`). Download/upload duplicate markers such as `(1)` are not part of a build name.
+- The canonical delivered filename for V3 is `interPhaceV3-build-<integer>-<Short-Hyphenated-Description>.zip` (for example, `interPhaceV3-build-553-Live-Audition-Planning.zip`). Download/upload duplicate markers such as `(1)` are not part of a build name.
 - Never wrap a delivered build inside an additional `interPhace-build-XX` folder or other parent directory.
 - The ZIP must be suitable for extracting directly into the permanent `current` folder and overwriting its contents while localhost remains running.
 - Build/version names belong in the ZIP filename and documentation, not as an extra directory inside the archive.
@@ -154,14 +153,85 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 - Use the canonical root `favicon.ico` supplied by the user in every future build unless explicitly changed.
 
 
-### The luxury of latency
-- interPhace is not a realtime instrument or realtime mixer. Do not optimize architecture around immediate audio response.
-- Lean into latency deliberately. Correct, deterministic audio creation is more important than immediacy.
-- interPhace creates/renders audio first and only plays audio after creation is complete.
-- Never begin playback while render work is still in progress.
-- After a global render reports complete, intentionally wait a full 1.0 second before starting playback. This safety pause is part of the product behavior, not a temporary workaround.
-- Future playback/export systems should prefer offline/precomputed rendering wherever practical instead of fragile realtime synchronization.
+### V2 render-first behavior and V3 live-audition direction
+- V2's current local and global audition behavior remains render-first until a Phace is explicitly migrated. Existing V2 rules for completed-buffer playback, tail handling, and the one-second post-render pause remain authoritative for those paths.
+- Beginning with V3 Build 553, persistent live audition is the forward project model. A live audition belongs to its originating Phace and continues while the user navigates between Phaces; only an explicit Stop press ends that audition.
+- V3 live engines must use a persistent project-level audio host. UI navigation must not destroy the active audition session.
+- V3's root `index.html` is the static-host-safe runtime entry point. It retains the project-level host and displays the current Phace UI without visible framing; the existing Phace pages remain independently runnable outside that host.
+- Live sound-design edits must be click-free. Larger source-state changes create a replacement voice/node and crossfade from the current voice; direct parameter changes use smooth audio-rate or scheduled automation where appropriate.
+- Offline rendering remains the authoritative export model. Export must continue to produce deterministic, completed files and is not made realtime merely because audition is live.
+- New V3 live-audition work must be migrated Phace by Phace through the shared host; do not create competing per-Phace playback systems.
 
+### V3 persistent runtime control bridge
+- The persistent runtime host receives plain, complete state messages from a Phace. It never reads that Phace's slider DOM.
+- The common bridge supports sound-state updates, start, and stop. State is JSON-safe and identifies its originating Phace.
+- Project state carries mixer gain/mute and bed-entry lead-in/fade-in data. A source Phace carries its own normalized controls and its local mixer gain.
+- This bridge is transport only until a Phace is explicitly migrated to the live runtime. Existing V2 page-owned audition must not be redirected through it early.
+
+### V3 pitched-runtime foundation
+- synthPhace and arpPhace will share one persistent pitched runtime, but neither may take over the other’s source selection or visual follower.
+- Before audible migration, synthPhace publishes a complete normalized state to the root host: authoritative patch, current UI state, project Root/Scale/Tempo, retained iP synth playback settings, and Synth mixer state. The root host retains it without producing audio.
+- iP retains ownership of sP/aP Timing, sP Loop Length, sP Effects Release, aP Effects Release, aP Arp Tone, and Arp / Synth Playback. These settings are not moved into a child Phace.
+- The obsolete iP sP Loop Audition and Loop Voice Length controls are removed. iP’s former Global Trigger Interval is labeled Loop Length and remains the future live sP repeat interval.
+- aP B1/B3 melody and B2 arp are exclusive playback sources. A future grid follower reports the active scheduler only; it never chooses, changes, or layers a source. B1/B3 share the melody follower and B2 uses its own 32-step follower. A B2 cell containing two 32nd triggers remains highlighted as one normal parent cell.
+
+### V3 synthPhace live audition
+- Standalone sP uses the retained pitched runtime rather than an offline render. Its complete established sP graph is scheduled live; do not substitute or simplify the instrument design to make it realtime.
+- Tempo and iP sP Loop Length define the next trigger boundary: `bars × 4 × 60 / tempo` seconds. A state update waits for that boundary and must not restart, crossfade, or alter the already-playing voice.
+- At a boundary, the previous graph receives the authored sP Effects Release fade while the new graph starts normally. This is a release/retrigger rule, not a generic slider-controlled crossfade.
+- The standalone Synth mixer dB level remains audible even when that channel is globally muted. Mute is global iP playback-only.
+
+### V3 arpPhace live audition
+- aP has two exclusive retained live schedulers: B1/B3 is the selected melody phrase and B2 is the selected arp phrase. Starting one stops the other; neither may layer or silently select the other source.
+- B1 and B3 share the melody phrase follower. B2 has its own 32-step follower. A B2 grid cell with two 32nd notes is still one highlighted parent cell.
+- Arp Tone keeps its established simple aP voice. With Arp Tone off, aP schedules individual live notes through the retained complete sP graph; it must not make offline phrase buffers.
+- aP state and sP patch edits are accepted at the next aP phrase boundary. Existing notes remain as scheduled.
+- aP must hydrate sP's saved authoritative state through the retained sP view before starting the full-synth route. aP must never require visiting sP first.
+- The full-sP aP route keeps each note's complete authored graph and releases/stops its sources only after its own gate plus Effects Release are silent. A 24-voice emergency ceiling may release the oldest overlapping full voice over 20 ms only to prevent runtime failure; it is not a sound-design control.
+- Full-sP aP must construct notes through a short live event lookahead (currently 180 ms), never by pre-allocating an entire melody or arp phrase. The complete graph remains unchanged; only construction time changes.
+- In live iP Arp mode, the pitch source is exclusively aP B1/B3 Melody. B2 Arp remains standalone-only and must never be selected by iP Arp mode.
+- iP global live playback establishes one future musical zero. dP, sP, and aP receive the same remaining start delay and derive all steps/loops from project Tempo; nP/dnP lead-in offsets remain relative to that zero.
+
+### V3 noisePhace live audition
+- Beginning with V3 Build 556, hosted noisePhace audition is generated by the persistent runtime's AudioWorklet voice. The existing noisePhace offline buffer renderer remains the export authority.
+- Hosted nP and dnP state replacement is centrally polled by the runtime every 250 ms. The host coalesces incoming states, waits 800 ms after the final edit, then replaces only with the latest complete state; it must never create a replacement per slider input event.
+- The live-state crossfade is a fixed 1.25 seconds with no user-facing duration control. At most two source voices may exist: the current outgoing voice and the incoming voice. An obsolete retiring voice is disposed before another replacement begins.
+- The live nP worklet allocates its fixed buffers and event slots at construction; its audio processing path does not create per-sample objects or arrays.
+- The active nP session persists through Phace navigation. Any visible audition control is a Stop control for that session and retains nP's purple identity while active.
+- Live worklets must explicitly declare the channel count they require. Do not infer stereo from a browser default.
+
+### V3 dronePhace live audition
+- Hosted dnP audition must use the same established drone renderer as standalone dnP until a realtime source has demonstrated sound parity against it. A simplified replacement graph is prohibited.
+- The persistent host owns dnP's streaming live source and its crossfade; completed offline buffers remain the export authority and are not the hosted live-audition path.
+- Never replace an existing sound path on a hunch, approximation, or merely plausible mapping. First identify the authoritative implementation and preserve its audible behavior; any intentionally different behavior requires explicit user approval.
+- A live migration must preserve the authoritative source algorithm in streaming form: identical control interpretation and DSP stages, with persistent per-sample state replacing offline arrays. It must not return to a fixed-duration pre-render as its live path.
+- A live processor must derive control-dependent constants when its complete state changes, not repeatedly inside its audio-block or per-sample processing path. Optimizing that repeated calculation is allowed only when it preserves the same control interpretation and DSP stages.
+- Disconnecting an AudioWorkletNode is not its lifecycle termination. Every hosted worklet must accept an explicit shutdown message and return false from process() on shutdown. The host must send that message whenever a voice is retired or stopped; CPU must return to its idle level after Stop.
+
+### V3 interPhace live bed routing
+- During hosted interPhace global audition, nP and dnP use the persistent live host rather than completed bed buffers. Their existing Start Offset, Fade In, mixer gain, and global mute rules are applied by the host.
+- The remaining interPhace musical material remains render-first until its own Phace is explicitly migrated. Live bed routing must not alter export rendering.
+- A global runtime session contains its active source Phaces and Stop terminates every hosted source, including their AudioWorklet processing loops.
+- iP view teardown during Phace navigation is not Stop. It may dispose iP-owned render-first playback resources, but it must leave the persistent host's global live session running. Only an explicit Stop, project replacement/import, or full host unload ends that session.
+- A hosted live source must use monotonic time. Fixed export-loop durations such as 60 seconds must not reset a live processor's LFOs, motion, or source phase.
+- Hosted Stop uses a fixed 300 ms release before worklet shutdown and disconnection. Stop must be click-free while still terminating the processor afterward.
+
+### V3 drumPhace live scheduling
+- Live dP scheduling reads the current grid and Chance/Volume/Repeats matrices only for steps inside its short lookahead window. A grid or variation edit therefore affects the next unscheduled occurrence and never requires a full-loop re-render.
+- Chance is rolled independently every time a scheduled drum step occurs. A blank Chance value means 100%; Volume and Repeats are applied only after that step wins its Chance roll.
+- The initial local dP live scheduler uses the existing native Web Audio drum voice functions. Offline drum rendering remains the export authority until dP is moved into the persistent host.
+- During local dP live audition, B2 schedules only the currently selected instrument; B1 Pattern and B3 Chance/Volume/Repeats schedule the complete kit from the next unscheduled step. The dP playhead must remain visibly legible on both B1 and B3 grids.
+- Persistent dP migration retains the proven native dP scheduler in an off-screen engine view owned by the root runtime. The visible dP page is only the control view; it sends complete saved state to that engine and may be destroyed during Phace navigation without stopping playback.
+- A retained dP engine publishes its playhead to the currently visible dP grid. While dP is visible, its active Stop button follows the current instrument color: Kick red, Snare green, Hat yellow. Outside dP, an active dP session uses drum red.
+- If a persistent dP session is currently soloing from B2, its session color persists across other Phaces: Kick red, Snare green, Hat yellow. A full-kit dP session uses red everywhere.
+- Hosted iP sequencer playback sends dP its selected source columns (K1–K8, S1–S8, H1–H8) for each project bar. The retained dP engine schedules the individual 16 steps within those columns live; iP must not also render a duplicate drum buffer for that sequenced hosted path. Global iP playback ignores dP’s active B1/B2/B3 page completely: the iP source columns decide what patterns play and iP’s Kick/Snare/Hat mixer gain and mute decide what is heard. Local dP audition remains page-led and ignores iP mute. A dP state change may update the hosted drum engine but never changes an active iP session’s button color.
+- During global iP live audition, nP and dnP Start Offset and Fade In are measured from the same future musical transport zero. Do not start either bed’s entry clock before the iP musical transport has its matching start reference. The hosted dP scheduler must use that same transport zero; otherwise a negative bed offset has no musical meaning.
+
+
+### Build 644 retired controls
+
+- iP Project Length and the iP/sP/dP/aP/nP/dnP Timing controls are retired. Old project files may contain these fields; they are ignored and discarded when iP next saves.
+- Project span is Sequencer-row count when the Sequencer has content; otherwise it follows the active visible drum-grid span. sP Loop Length remains a separate, active synth retrigger setting.
 
 ### synthPhace global loop length
 - interPhace owns a synthPhace Loop Length setting of 1–16 bars, default 4 bars.
@@ -180,20 +250,9 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 - Audition playback is therefore buffer playback only; synthesis/effects generation does not occur concurrently with what the user hears.
 
 
-### synthPhace Audition Loop rendering
-- Audition Length affects synthPhace audition only when Audition Loop is enabled.
-- With Audition Loop off, synthPhace always renders and plays the complete natural audition.
-- With Audition Loop on, every cycle re-reads current synthPhace settings, renders a fresh completed in-memory buffer, waits the standard one-second post-render pause, and then plays it.
-- A 1–5 second Audition Length is a voice gate. At the gate endpoint the synth voice releases before effects, then the effected output uses the current Effects Release setting so delay/reverb cannot accumulate into the next loop cycle.
-- `Full` uses the natural envelope length even while looping.
-- A loop cycle never modifies a buffer already being heard; edits become audible on the next read/render cycle.
-- Audition Loop continues until the Audition/Stop control is pressed or the user leaves synthPhace.
-
 ### Settings terminology and identity
-- synthPhace Settings uses `Global Trigger Interval` for the 1-16 bar interPhace-level retrigger interval.
-- `Loop Voice Length` and `Loop Audition` are the paired local synthPhace audition-loop controls.
+- synthPhace Settings uses `Loop Length` for the 1-16 bar interPhace-level retrigger interval.
 - interPhace B5 Settings page titles use each Phace's identity color as a page-location cue.
-- synthPhace Loop Audition uses a synthPhace-blue toggle track when enabled.
 
 ### Phace naming and settings colors
 - Displayed Phace names use the branded camel-case spelling with capital `P`: synthPhace, drumPhace, arpPhace, noisePhace.
@@ -474,27 +533,19 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 - Mixer dB is converted with `10^(dB/20)`; mute is exact zero gain.
 - Mixer edits affect future renders. Completed in-memory AudioBuffers remain immutable while playing.
 
-### synthPhace single-effects-chain loop rule
-- Loop Audition is monophonic through the full synthPhace signal chain, including delay and reverb.
-- At Loop Voice Length, the voice releases before effects so the effects stop receiving new signal.
-- The existing effected output then performs a short smooth release to zero before the next cycle may begin.
-- Effects from one Loop Audition cycle must not accumulate underneath later cycles.
-- Normal one-shot synthPhace audition is exempt: it should preserve the complete natural delay/reverb tail.
-
 ### Effects Release
 - synthPhace Settings and arpPhace Settings each expose an `Effects Release` slider from 10–400 ms in 10 ms steps. Zero is intentionally unavailable to reduce click risk.
 - synthPhace default: 120 ms. arpPhace default: 30 ms.
-- synthPhace Loop Audition uses its Effects Release setting immediately.
 - arpPhace stores its Effects Release independently for arp note/retrigger behavior.
 - Effects Release is a post-effects fade used to prevent delay/reverb accumulation; it does not replace the pre-effects voice release.
-- synthPhace Effects Release is grouped beneath Global Trigger Interval because it participates in loop/retrigger behavior.
+- synthPhace Effects Release is grouped beneath Loop Length because it participates in loop/retrigger behavior.
 
 ### interPhace global audition
 - interPhace global Audition uses the same single-action button logic as the Phaces: one click/touch starts; one click/touch while rendering or playing stops. Do not add long-press or double-click behavior.
 - Global Audition is an offline render coordinator, not a realtime mixer.
 - The global project Tempo and Length define the completed loop buffer.
 - drumPhace renders Kick, Snare, and Hat together using the current device pattern width (typically 8 bars on laptop, 4 on phone) and repeats that finished drum loop to fill the global project loop.
-- synthPhace is monophonic and retriggers at Global Trigger Interval. Local synthPhace Loop Audition and Loop Voice Length settings are ignored by interPhace global Audition.
+- synthPhace is monophonic and retriggers at Loop Length.
 - synthPhace Effects Release is used at each global retrigger so the outgoing effected sound releases rather than accumulating indefinitely.
 - Synth/Kick/Snare/Hat read the interPhace dB mixer before their renders.
 - interPhace combines the completed Phace renders into one finished in-memory AudioBuffer, applies a final safety stage, waits the required full 1.0 second, then loops that completed buffer.
@@ -894,12 +945,12 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 - Shared arp playback should consume this setting when routing is wired; do not create a duplicate sound-source preference.
 
 ### Settings toggle wiring
-- New interPhace settings toggles must copy the established Borders/Loop Audition persistence pattern, including the actual root persistence function name.
+- New interPhace settings toggles must copy the established Borders persistence pattern, including the actual root persistence function name.
 - Do not assume child-Phace `saveState()` helpers exist in root `app.js`.
 
 ### Phace settings toggle checked-state colors
 - Phace-specific settings toggles reuse the standard toggle component and only specialize the checked dot color through the canonical Phace color token.
-- Arp Tone uses `var(--phace-arp)` in the same way Loop Audition uses synth blue and Borders uses drum red.
+- Arp Tone uses `var(--phace-arp)` and Borders uses drum red.
 
 ### arpPhace B2 Audition
 - Center Audition on B2 is a page-local looping arp audition. It plays only the current A1-A4 arp page.
@@ -977,8 +1028,8 @@ Patch Presets store canonical Major harmony positions. Explicit per-scale harmon
 
 ### Mixer — Arp trigger
 - interPhace B2 Mixer exposes an `Arp` toggle for the Synth part.
-- Off: synthPhace is sequenced by its normal Global Trigger Interval.
-- On: the Global Trigger Interval is bypassed for global audition and the current arpPhace B2 arp pattern sequences the synthPhace patch instead.
+- Off: synthPhace is sequenced by its normal Loop Length.
+- On: Loop Length is bypassed for global audition and the current arpPhace B2 arp pattern sequences the synthPhace patch instead.
 - This is a trigger-source selector, not an additional mixer channel.
 - In Mixer Arp mode, synthPhace remains the sound source and the Synth mixer channel remains the level/mute owner.
 - Use the current arp's constructed event stream (Pattern, Motion, Rate-derived timing, Gate) and repeat its complete contour through the global project loop.

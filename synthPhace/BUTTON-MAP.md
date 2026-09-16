@@ -22,7 +22,7 @@ Carrier/Harmonics owns carrier level, scale-aware harmony offsets and gains, cho
 
 ## Audition
 
-Local synthPhace audition is offline/render-first. Effects are rendered as one chain and loop audition preserves release behavior. Global Trigger Interval is a synthPhace setting for direct synth audition, not a replacement for arpPhace melody sequencing.
+Local synthPhace audition remains offline/render-first until its live migration. iP owns Loop Length and Effects Release for future direct sP live playback; Loop Length is not a replacement for arpPhace melody sequencing.
 
 ## Ownership
 

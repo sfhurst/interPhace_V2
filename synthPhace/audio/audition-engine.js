@@ -19,6 +19,25 @@
   let activeGeneration = 0;
   let playing = false;
   let auditionState = "idle";
+  let livePlaying = false;
+  let liveTimer = null;
+  let livePendingState = null;
+  let liveNextTriggerAt = 0;
+  let liveArpPlaying = false;
+  let liveArpTimer = null;
+  let liveArpPendingState = null;
+  let liveArpNextLoopAt = 0;
+  let liveArpCurrentLoop = null;
+  let liveArpNextMelodyBarAt = 0;
+  let liveArpMelodyBarIndex = 0;
+  const liveVoices = new Set();
+  const LIVE_LOOKAHEAD_SECONDS = 0.10;
+  const LIVE_TICK_MS = 20;
+  const LIVE_START_LEAD_SECONDS = 0.07;
+  const LIVE_STOP_RELEASE_SECONDS = 0.30;
+  const LIVE_MAX_COMPLEX_VOICES = 24;
+  const LIVE_VOICE_STEAL_RELEASE_SECONDS = 0.020;
+  const LIVE_ARP_LOOKAHEAD_SECONDS = 0.18;
 
   function notifyAuditionState() {
     window.dispatchEvent(new CustomEvent("interPhace:audition-state"));
@@ -78,11 +97,11 @@
       child = JSON.parse(localStorage.getItem(key) || "null")?.child || {};
     } catch (_) {}
 
-    const loop = !!child.synthAuditionLoop;
-    const rawLength = Number(child.synthAuditionLength);
-    const lengthSeconds = Number.isFinite(rawLength) && rawLength >= 1 && rawLength <= 5
-      ? rawLength
-      : null; // null = Full
+    // Local Loop Audition and Loop Voice Length were retired for the live
+    // migration. Standalone legacy audition remains a single full render until
+    // the persistent live sP engine replaces it.
+    const loop = false;
+    const lengthSeconds = null;
     const rawEffectsRelease = Number(child.synthEffectsRelease);
     const effectsReleaseMs = Math.max(
       10,
@@ -189,12 +208,13 @@
     return finalized;
   }
 
-  function buildGraph(ctx, legacyPatch, gateSeconds = null, effectsReleaseSeconds = 0.120) {
+  function buildGraph(ctx, legacyPatch, gateSeconds = null, effectsReleaseSeconds = 0.120, destination = null, { postMix = true } = {}) {
     if (!window.TransientSourceEngine?.apply) throw new Error("synthPhace transient source engine is unavailable.");
     if (!window.FilterEngine?.apply) throw new Error("synthPhace filter engine is unavailable.");
     if (!window.TextureEngine?.apply) throw new Error("synthPhace texture engine is unavailable.");
     if (!window.EffectsEngine?.applyAll) throw new Error("synthPhace effects engine is unavailable.");
 
+    const graphStart = ctx.currentTime;
     const voice = buildVoice(ctx, legacyPatch);
     const envelope = voice.envelope;
 
@@ -228,10 +248,10 @@
       performanceLength = gateSeconds;
       const gate = ctx.createGain();
       const fade = Math.min(0.035, Math.max(0.008, gateSeconds * 0.18));
-      const releaseStart = Math.max(0, gateSeconds - fade);
-      gate.gain.setValueAtTime(1, 0);
+      const releaseStart = graphStart + Math.max(0, gateSeconds - fade);
+      gate.gain.setValueAtTime(1, graphStart);
       gate.gain.setValueAtTime(1, releaseStart);
-      gate.gain.linearRampToValueAtTime(0, gateSeconds);
+      gate.gain.linearRampToValueAtTime(0, graphStart + gateSeconds);
       textured.node.connect(gate);
       performanceNode = gate;
     }
@@ -246,36 +266,45 @@
 
     let finalNode = effected.node;
 
-    // Loop Audition is monophonic all the way through its effects.
+    // A gated trigger render is monophonic all the way through its effects.
     // At the voice gate boundary, stop feeding the effects upstream, then
     // quickly release the entire effected signal so delay/reverb cannot pile up.
     if (Number.isFinite(gateSeconds) && gateSeconds > 0) {
       const effectsRelease = ctx.createGain();
-      const releaseEnd = gateSeconds + effectsReleaseSeconds;
-      effectsRelease.gain.setValueAtTime(1, 0);
-      effectsRelease.gain.setValueAtTime(1, gateSeconds);
+      const releaseEnd = graphStart + gateSeconds + effectsReleaseSeconds;
+      effectsRelease.gain.setValueAtTime(1, graphStart);
+      effectsRelease.gain.setValueAtTime(1, graphStart + gateSeconds);
       effectsRelease.gain.linearRampToValueAtTime(0, releaseEnd);
       effected.node.connect(effectsRelease);
       finalNode = effectsRelease;
     }
 
     const master = ctx.createGain();
-    const synthMixer = readGlobalMixerChannel("synth");
-    master.gain.setValueAtTime(0.72 * synthMixer.gain, 0);
-
-    const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -6;
-    limiter.knee.value = 0;
-    limiter.ratio.value = 20;
-    limiter.attack.value = 0.002;
-    limiter.release.value = 0.08;
-
     finalNode.connect(master);
-    master.connect(limiter);
-    limiter.connect(ctx.destination);
+    const synthMixer = readGlobalMixerChannel("synth");
+    if (postMix) {
+      master.gain.setValueAtTime(0.72 * synthMixer.gain, graphStart);
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -6;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.08;
+      master.connect(limiter);
+      limiter.connect(destination || ctx.destination);
+    } else {
+      // Cached aP buffers stop here: chance/volume, mixer gain, and any
+      // output limiting remain live at playback time.
+      master.gain.setValueAtTime(1, graphStart);
+      master.connect(destination || ctx.destination);
+    }
 
     return {
       source: voice.source,
+      master,
+      oscillators: Array.isArray(voice.source?.oscillators)
+        ? voice.source.oscillators
+        : [voice.source?.carrier].filter(Boolean),
       envelope,
       performanceLength,
       frequency: midiToFrequency(legacyPatch.midiNote),
@@ -284,13 +313,13 @@
     };
   }
 
-  async function renderPass(legacyPatch, totalSeconds, gateSeconds = null, effectsReleaseSeconds = 0.120) {
+  async function renderPass(legacyPatch, totalSeconds, gateSeconds = null, effectsReleaseSeconds = 0.120, options = {}) {
     if (!OfflineAudioContextClass) {
       throw new Error("Offline Web Audio rendering is unavailable.");
     }
     const frameCount = Math.max(1, Math.ceil(totalSeconds * SAMPLE_RATE));
     const ctx = new OfflineAudioContextClass(2, frameCount, SAMPLE_RATE);
-    const graph = buildGraph(ctx, legacyPatch, gateSeconds, effectsReleaseSeconds);
+    const graph = buildGraph(ctx, legacyPatch, gateSeconds, effectsReleaseSeconds, null, options);
     const buffer = await ctx.startRendering();
     return { buffer, graph };
   }
@@ -539,6 +568,117 @@
     return ctx.startRendering();
   }
 
+  const dryArpPrebuild = new Map();
+  let lastDryArpPrebuildDiagnostics = null;
+  // Full-note aP cache: a rendered buffer contains the complete sP sound and
+  // effects, but deliberately excludes the live output controls.  A cache
+  // generation is the complete captured patch state; old generations are not
+  // discarded while a replacement generation is rendering.
+  const completeArpPrebuild = new Map();
+  const completeArpBuilds = new Map();
+  let completeArpWarmGeneration = 0;
+  let completeArpWarmPending = null;
+  let lastCompleteArpPrebuildDiagnostics = { status: "not-run", hits: 0, misses: 0, liveFallbacks: 0, replacementReady: false };
+  function stableState(value) {
+    if (Array.isArray(value)) return value.map(stableState);
+    if (value && typeof value === "object") return Object.keys(value).sort().reduce((out, key) => {
+      out[key] = stableState(value[key]);
+      return out;
+    }, {});
+    return value;
+  }
+  function fullArpSoundVersion(patch) {
+    // midiNote is supplied separately below; tempo remains part of the state
+    // because tempo-synced effects can change the rendered sound.
+    const copy = cloneLiveState(patch) || {};
+    delete copy.midiNote;
+    return JSON.stringify(stableState(copy));
+  }
+  function fullArpCacheKey(soundVersion, midiNote, gateSeconds, releaseSeconds) {
+    return `${soundVersion}|${Math.round(midiNote)}|${Math.round(gateSeconds * 10000)}|${Math.round(releaseSeconds * 10000)}`;
+  }
+  async function renderCompleteArpNote(sourcePatch, event, releaseSeconds) {
+    const patch = { ...sourcePatch, midiNote: event.midiNote };
+    const rendered = await renderPass(
+      patch,
+      event.gateSeconds + releaseSeconds + .08,
+      event.gateSeconds,
+      releaseSeconds,
+      { postMix: false },
+    );
+    return finalizeBuffer(rendered.buffer);
+  }
+  async function prebuildCompleteArpNotes(sequence, suppliedPatch = null, requestGeneration = null) {
+    const adapter = window.SynthPhacePatchAdapter;
+    const sourcePatch = cloneLiveState(suppliedPatch) || adapter?.getLegacyPatch?.();
+    if (!sourcePatch) throw new Error("A complete synth patch is required for aP full-note caching.");
+    const releaseSeconds = Math.max(.01, Math.min(4, (Number(sequence?.effectsReleaseMs) || 30) / 1000));
+    const soundVersion = fullArpSoundVersion(sourcePatch);
+    const events = [...new Map((sequence?.events || []).map(event => {
+      const midiNote = Math.round(Number(event?.midiNote));
+      const gateSeconds = Math.max(.01, Number(event?.gateSeconds) || .01);
+      return [fullArpCacheKey(soundVersion, midiNote, gateSeconds, releaseSeconds), { midiNote, gateSeconds }];
+    })).values()].filter(event => Number.isFinite(event.midiNote));
+    const startedQueue = performance.now(), notes = [], buildId = `${soundVersion}:${Date.now()}`;
+    const requiredKeys = events.map(event => fullArpCacheKey(soundVersion, event.midiNote, event.gateSeconds, releaseSeconds));
+    const initialReady = requiredKeys.filter(key => completeArpPrebuild.has(key)).length;
+    completeArpBuilds.set(soundVersion, { status: initialReady === events.length ? "ready" : "building", buildId, total: events.length, ready: initialReady, requiredKeys });
+    for (const event of events) {
+      if (requestGeneration !== null && requestGeneration !== completeArpWarmGeneration) {
+        return { status: "superseded", phrase: sequence?.phrase || null, soundVersion };
+      }
+      const started = performance.now();
+      const key = fullArpCacheKey(soundVersion, event.midiNote, event.gateSeconds, releaseSeconds);
+      if (!completeArpPrebuild.has(key)) completeArpPrebuild.set(key, await renderCompleteArpNote(sourcePatch, event, releaseSeconds));
+      const buffer = completeArpPrebuild.get(key);
+      const build = completeArpBuilds.get(soundVersion);
+      if (build?.buildId === buildId) build.ready += 1;
+      notes.push({ ...event, status: "ready", renderMs: Math.round((performance.now() - started) * 10) / 10, seconds: buffer.duration, frames: buffer.length });
+    }
+    const ready = requiredKeys.filter(key => completeArpPrebuild.has(key)).length;
+    completeArpBuilds.set(soundVersion, { status: ready === events.length ? "ready" : "building", buildId, total: events.length, ready, requiredKeys });
+    lastCompleteArpPrebuildDiagnostics = { status: ready === events.length ? "ready" : "partial", phrase: sequence?.phrase || null, soundVersion, notes, ready, cachedBuffers: completeArpPrebuild.size, totalQueueMs: Math.round((performance.now() - startedQueue) * 10) / 10, hits: lastCompleteArpPrebuildDiagnostics.hits || 0, misses: lastCompleteArpPrebuildDiagnostics.misses || 0, liveFallbacks: lastCompleteArpPrebuildDiagnostics.liveFallbacks || 0, replacementReady: ready === events.length };
+    return lastCompleteArpPrebuildDiagnostics;
+  }
+  function warmCompleteArpNotes(sequence, synthState, { settleMs = 0 } = {}) {
+    const patch = livePatch(synthState);
+    if (!patch) return Promise.reject(new Error("A complete synth patch is required for aP full-note caching."));
+    const generation = ++completeArpWarmGeneration;
+    if (completeArpWarmPending) {
+      clearTimeout(completeArpWarmPending.timer);
+      completeArpWarmPending.resolve({ status: "superseded" });
+      completeArpWarmPending = null;
+    }
+    return new Promise((resolve, reject) => {
+      const launch = () => {
+        completeArpWarmPending = null;
+        prebuildCompleteArpNotes(sequence, patch, generation).then(resolve, reject);
+      };
+      const timer = window.setTimeout(launch, Math.max(0, Number(settleMs) || 0));
+      completeArpWarmPending = { timer, resolve };
+    });
+  }
+  async function prebuildDryArpNotes(sequence) {
+    const adapter = window.SynthPhacePatchAdapter;
+    const patch = adapter?.getLegacyPatch?.();
+    const notes = [...new Set((sequence?.events || []).map(e => Number(e?.midiNote)).filter(Number.isFinite))];
+    const queueStarted = performance.now();
+    const results = [];
+    for (const midiNote of notes) {
+      const started = performance.now();
+      const notePatch = { ...patch, midiNote };
+      const seconds = Math.max(.05, Math.min(4, envelopeLength(notePatch) + .08));
+      const ctx = new OfflineAudioContextClass(2, Math.ceil(seconds * SAMPLE_RATE), SAMPLE_RATE);
+      const voice = buildVoice(ctx, notePatch);
+      voice.envelope.node.connect(ctx.destination);
+      const buffer = await ctx.startRendering();
+      dryArpPrebuild.set(midiNote, buffer);
+      results.push({ midiNote, status: "ready", renderMs: Math.round((performance.now() - started) * 10) / 10, seconds: buffer.duration, frames: buffer.length });
+    }
+    lastDryArpPrebuildDiagnostics = { phrase: sequence?.phrase || null, notes: results, ready: dryArpPrebuild.size, totalQueueMs: Math.round((performance.now() - queueStarted) * 10) / 10 };
+    return lastDryArpPrebuildDiagnostics;
+  }
+
   async function renderArpPerformance({
     events = [],
     loopSeconds,
@@ -747,6 +887,383 @@
     return Math.round(Number(adapter?.getLegacyPatch?.()?.transient?.preset) || 0);
   }
 
+  function cloneLiveState(state) {
+    try { return JSON.parse(JSON.stringify(state)); }
+    catch (_) { return null; }
+  }
+
+  // The established graph builders use ctx.currentTime when scheduling their
+  // source/envelope internals. This small scheduling view preserves that DSP
+  // exactly while putting the next complete voice on a future transport point.
+  function scheduledContext(ctx, startAt, scheduledSources = null) {
+    return new Proxy(ctx, {
+      get(target, property) {
+        if (property === "currentTime") return startAt;
+        const value = Reflect.get(target, property, target);
+        // A complete live graph includes sources created inside its effects
+        // (chorus/detune/width/delay modulators) as well as the core voice.
+        // Keep every scheduled source with this voice so Stop can terminate
+        // the whole graph instead of leaving silent LFOs running forever.
+        if (
+          scheduledSources &&
+          (property === "createOscillator" || property === "createBufferSource") &&
+          typeof value === "function"
+        ) {
+          return (...args) => {
+            const source = value.apply(target, args);
+            scheduledSources.push(source);
+            return source;
+          };
+        }
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  }
+
+  function liveLoopSeconds(state) {
+    const tempo = Math.max(30, Math.min(300, Number(state?.project?.tempo) || 75));
+    const bars = Math.max(1, Math.min(16, Math.round(Number(state?.playback?.loopLengthBars) || 4)));
+    return bars * 4 * 60 / tempo;
+  }
+
+  function livePatch(state) {
+    const patch = cloneLiveState(state?.patch);
+    if (!patch || typeof patch !== "object") return null;
+    patch.midiNote = Math.max(21, Math.min(108, Math.round(Number(state?.project?.root) || patch.midiNote || 60)));
+    patch.tempo = Math.max(30, Math.min(300, Number(state?.project?.tempo) || patch.tempo || 75));
+    return patch;
+  }
+
+  function disposeLiveVoice(record) {
+    if (!record || !liveVoices.delete(record)) return;
+    if (record.cleanupTimer) window.clearTimeout(record.cleanupTimer);
+    for (const oscillator of record.sources || []) {
+      // This runs only after the graph's own gate and effects release are
+      // silent. Stopping the source here reclaims the underlying DSP without
+      // changing the audible note.
+      try { oscillator.stop(record.context.currentTime + 0.005); } catch (_) {}
+      try { oscillator.disconnect(); } catch (_) {}
+    }
+    try { record.master.disconnect(); } catch (_) {}
+  }
+
+  function releaseLiveVoice(record, at) {
+    if (!record || !liveVoices.has(record)) return;
+    try {
+      record.master.gain.cancelScheduledValues(at);
+      record.master.gain.setValueAtTime(record.master.gain.value, at);
+      record.master.gain.linearRampToValueAtTime(0, at + LIVE_VOICE_STEAL_RELEASE_SECONDS);
+    } catch (_) {}
+    window.setTimeout(
+      () => disposeLiveVoice(record),
+      Math.max(0, at - record.context.currentTime + LIVE_VOICE_STEAL_RELEASE_SECONDS + .02) * 1000,
+    );
+  }
+
+  function enforceLiveVoiceLimit(context, startAt) {
+    const activeAtStart = [...liveVoices]
+      .filter(record => record.startAt <= startAt && record.audibleUntil > startAt)
+      .sort((a, b) => a.audibleUntil - b.audibleUntil);
+    if (activeAtStart.length < LIVE_MAX_COMPLEX_VOICES) return;
+    // This is an overload guard only. Under normal musical density, every
+    // graph keeps its authored gate and effects-release behavior untouched.
+    releaseLiveVoice(activeAtStart[0], Math.max(context.currentTime, startAt));
+  }
+
+  function registerLiveVoice(context, graph, startAt, gateSeconds, releaseSeconds) {
+    enforceLiveVoiceLimit(context, startAt);
+    const audibleUntil = startAt + gateSeconds + releaseSeconds;
+    const record = {
+      context,
+      master: graph.master,
+      sources: graph.sources,
+      startAt,
+      audibleUntil,
+      cleanupTimer: null,
+    };
+    liveVoices.add(record);
+    record.cleanupTimer = window.setTimeout(
+      () => disposeLiveVoice(record),
+      Math.ceil((Math.max(0, audibleUntil - context.currentTime) + 0.04) * 1000),
+    );
+    return record;
+  }
+
+  function scheduleLiveTrigger(startAt, state) {
+    const context = ensurePlaybackContext();
+    const patch = livePatch(state);
+    if (!patch) return;
+    const loopSeconds = liveLoopSeconds(state);
+    const releaseSeconds = Math.max(0.01, Math.min(4, (Number(state?.playback?.effectsReleaseMs) || 120) / 1000));
+    const sources = [];
+    const graph = buildGraph(scheduledContext(context, startAt, sources), patch, loopSeconds, releaseSeconds);
+    graph.sources = sources;
+    registerLiveVoice(context, graph, startAt, loopSeconds, releaseSeconds);
+  }
+
+  function liveTick() {
+    if (!livePlaying) return;
+    const context = ensurePlaybackContext();
+    const horizon = context.currentTime + LIVE_LOOKAHEAD_SECONDS;
+    while (livePlaying && liveNextTriggerAt <= horizon) {
+      if (!livePendingState) return;
+      if (liveNextTriggerAt < context.currentTime - 0.02) liveNextTriggerAt = context.currentTime + 0.02;
+      const triggerState = cloneLiveState(livePendingState);
+      scheduleLiveTrigger(liveNextTriggerAt, triggerState);
+      // The state that reaches this boundary defines the following musical
+      // boundary too. Later edits wait there; they never restart this voice.
+      liveNextTriggerAt += liveLoopSeconds(triggerState);
+    }
+  }
+
+  async function startLive(state) {
+    stopLive();
+    const context = ensurePlaybackContext();
+    if (context.state === "suspended") await context.resume();
+    window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "sP-context-ready", childAudioTime: context.currentTime });
+    livePendingState = cloneLiveState(state);
+    if (!livePendingState) throw new Error("A complete synthPhace live state is required.");
+    livePlaying = true;
+    const requestedDelay = Math.max(LIVE_START_LEAD_SECONDS, Number(state?.runtimeEntry?.startDelay) || 0);
+    const targetEpochMs = Number(state?.runtimeEntry?.transportStartEpochMs);
+    const remainingDelay = Number.isFinite(targetEpochMs) ? Math.max(.02, (targetEpochMs - Date.now()) / 1000) : requestedDelay;
+    liveNextTriggerAt = context.currentTime + remainingDelay;
+    window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "sP-step-zero-armed", childAudioTime: context.currentTime, childStartAt: liveNextTriggerAt, requestedDelay, remainingDelay, expectedEpochMs: Number(state?.runtimeEntry?.transportStartEpochMs) || null });
+    liveTick();
+    liveTimer = window.setInterval(liveTick, LIVE_TICK_MS);
+  }
+
+  function updateLive(state) {
+    const next = cloneLiveState(state);
+    if (next) livePendingState = next;
+  }
+
+  function stopLive() {
+    livePlaying = false;
+    if (liveTimer) window.clearInterval(liveTimer);
+    liveTimer = null;
+    livePendingState = null;
+    const context = playbackContext;
+    if (!context) return;
+    const now = context.currentTime;
+    for (const record of [...liveVoices]) {
+      try {
+        record.master.gain.cancelScheduledValues(now);
+        record.master.gain.setValueAtTime(record.master.gain.value, now);
+        record.master.gain.linearRampToValueAtTime(0, now + LIVE_STOP_RELEASE_SECONDS);
+      } catch (_) {}
+      window.setTimeout(() => disposeLiveVoice(record), (LIVE_STOP_RELEASE_SECONDS + 0.04) * 1000);
+    }
+  }
+
+  function scheduleLiveArpEvent(loop, event) {
+    const state = loop?.state;
+    const sequence = state?.sequence;
+    const synthState = state?.synthState;
+    const context = ensurePlaybackContext();
+    const basePatch = livePatch(synthState);
+    if (!sequence || !basePatch) return;
+    const releaseSeconds = Math.max(0.01, Math.min(4, (Number(sequence.effectsReleaseMs) || 30) / 1000));
+    const offset = Math.max(0, Number(event?.offsetSeconds) || 0);
+    const gateSeconds = Math.max(.01, Number(event?.gateSeconds) || .01);
+    const patch = cloneLiveState(basePatch);
+    patch.midiNote = Math.max(21, Math.min(108, Math.round(Number(event?.midiNote) || basePatch.midiNote)));
+    const sources = [];
+    const graph = buildGraph(
+      scheduledContext(context, loop.startAt + offset, sources),
+      patch,
+      gateSeconds,
+      releaseSeconds,
+    );
+    graph.sources = sources;
+    registerLiveVoice(context, graph, loop.startAt + offset, gateSeconds, releaseSeconds);
+  }
+
+  // The persistent root owns global musical time.  These helpers retain the
+  // established sP graph and only accept an externally supplied context,
+  // destination, and start time.
+  function scheduleRootSynthTrigger({ context, destination, startTime, state }) {
+    const patch = livePatch(state);
+    if (!context || !destination || !patch) return;
+    const loopSeconds = liveLoopSeconds(state);
+    const releaseSeconds = Math.max(0.01, Math.min(4, (Number(state?.playback?.effectsReleaseMs) || 120) / 1000));
+    const sources = [];
+    const graph = buildGraph(scheduledContext(context, startTime, sources), patch, loopSeconds, releaseSeconds, destination);
+    graph.sources = sources;
+    registerLiveVoice(context, graph, startTime, loopSeconds, releaseSeconds);
+  }
+
+  function scheduleRootArpEvent({ context, destination, startTime, sequence, synthState, event, useFullNoteCache = false }) {
+    const basePatch = livePatch(synthState);
+    if (!context || !destination || !sequence || !basePatch || !event) return;
+    const releaseSeconds = Math.max(0.01, Math.min(4, (Number(sequence.effectsReleaseMs) || 30) / 1000));
+    const gateSeconds = Math.max(.01, Number(event.gateSeconds) || .01);
+    const patch = cloneLiveState(basePatch);
+    patch.midiNote = Math.max(21, Math.min(108, Math.round(Number(event.midiNote) || basePatch.midiNote)));
+    if (useFullNoteCache) {
+      const soundVersion = fullArpSoundVersion(patch);
+      const key = fullArpCacheKey(soundVersion, patch.midiNote, gateSeconds, releaseSeconds);
+      const buffer = completeArpPrebuild.get(key);
+      if (buffer) {
+        const source = context.createBufferSource();
+        const liveGain = context.createGain();
+        source.buffer = buffer;
+        // These values are intentionally resolved at trigger time, after the
+        // cache.  Cache output is never a frozen mixer/chance decision.
+        const mixer = readGlobalMixerChannel("synth");
+        liveGain.gain.setValueAtTime(
+          Math.max(0, Number(event.volumeMultiplier ?? 1)) * 0.72 * mixer.gain,
+          startTime,
+        );
+        source.connect(liveGain);
+        liveGain.connect(destination);
+        source.start(startTime);
+        lastCompleteArpPrebuildDiagnostics = { ...lastCompleteArpPrebuildDiagnostics, hits: (lastCompleteArpPrebuildDiagnostics.hits || 0) + 1, last: "cache-hit", replacementReady: completeArpBuilds.get(soundVersion)?.status === "ready" };
+        return { cached: true };
+      }
+      lastCompleteArpPrebuildDiagnostics = { ...lastCompleteArpPrebuildDiagnostics, misses: (lastCompleteArpPrebuildDiagnostics.misses || 0) + 1, liveFallbacks: (lastCompleteArpPrebuildDiagnostics.liveFallbacks || 0) + 1, last: "cache-miss-live-fallback", replacementReady: completeArpBuilds.get(soundVersion)?.status === "ready" };
+      // Do not block a musical boundary.  The existing live graph plays now;
+      // the exact replacement is built in the background for later notes.
+      // A completed sound-version build may still lack this exact pitch/gate
+      // key after a grid or Pattern change.  Queue the latest snapshot again;
+      // the warmer renders only missing keys and supersedes stale requests.
+      if (completeArpBuilds.get(soundVersion)?.status !== "building") {
+        warmCompleteArpNotes(sequence, synthState, { settleMs: 80 }).catch(error => console.warn("aP full-note cache build failed.", error));
+      }
+    }
+    const sources = [];
+    const graph = buildGraph(scheduledContext(context, startTime, sources), patch, gateSeconds, releaseSeconds, destination);
+    graph.sources = sources;
+    if (Number(event.volumeMultiplier) !== 1) graph.master.gain.setValueAtTime(graph.master.gain.value * Math.max(0, Number(event.volumeMultiplier) || 0), startTime);
+    registerLiveVoice(context, graph, startTime, gateSeconds, releaseSeconds);
+    return { cached: false };
+  }
+
+  function stopRootVoices() {
+    for (const record of [...liveVoices]) {
+      const now = record.context.currentTime;
+      try {
+        record.master.gain.cancelScheduledValues(now);
+        record.master.gain.setValueAtTime(record.master.gain.value, now);
+        record.master.gain.linearRampToValueAtTime(0, now + LIVE_STOP_RELEASE_SECONDS);
+      } catch (_) {}
+      window.setTimeout(() => disposeLiveVoice(record), (LIVE_STOP_RELEASE_SECONDS + .04) * 1000);
+    }
+  }
+
+  function arpLoopSeconds(state) {
+    return Math.max(.05, Number(state?.sequence?.loopSeconds) || .05);
+  }
+
+  function isMelodySequence(state) {
+    return state?.sequence?.view === "melody" || state?.sequence?.view === "chance";
+  }
+
+  function melodyBarCount(state) {
+    return Math.max(1, Math.round((Number(state?.sequence?.loopSixteenths) || 16) / 16));
+  }
+
+  function melodyBarSeconds(state) {
+    return Math.max(.05, arpLoopSeconds(state) / melodyBarCount(state));
+  }
+
+  function scheduleLiveMelodyBar(state, barIndex, startAt) {
+    const sequence = state?.sequence;
+    if (!sequence) return;
+    const firstStep = barIndex * 16;
+    const finalStep = firstStep + 16;
+    const barOffsetSeconds = firstStep * (arpLoopSeconds(state) / Math.max(1, Number(sequence.loopSixteenths) || 16));
+    for (const event of sequence.events || []) {
+      const offset = Number(event?.offsetSixteenths);
+      if (!Number.isFinite(offset) || offset < firstStep || offset >= finalStep) continue;
+      scheduleLiveArpEvent(
+        { state, startAt },
+        { ...event, offsetSeconds: Math.max(0, Number(event.offsetSeconds) - barOffsetSeconds) }
+      );
+    }
+  }
+
+  function arpTick() {
+    if (!liveArpPlaying) return;
+    const context = ensurePlaybackContext();
+    const horizon = context.currentTime + LIVE_ARP_LOOKAHEAD_SECONDS;
+    while (liveArpPlaying) {
+      if (isMelodySequence(liveArpPendingState)) {
+        if (liveArpNextMelodyBarAt > horizon) return;
+        const state = cloneLiveState(liveArpPendingState);
+        if (!state) return;
+        const barCount = melodyBarCount(state);
+        scheduleLiveMelodyBar(state, liveArpMelodyBarIndex % barCount, liveArpNextMelodyBarAt);
+        liveArpMelodyBarIndex = (liveArpMelodyBarIndex + 1) % barCount;
+        liveArpNextMelodyBarAt += melodyBarSeconds(state);
+        continue;
+      }
+      if (!liveArpCurrentLoop) {
+        const state = cloneLiveState(liveArpPendingState);
+        if (!state) return;
+        liveArpCurrentLoop = { startAt: liveArpNextLoopAt, state, eventIndex: 0 };
+        liveArpNextLoopAt += arpLoopSeconds(state);
+      }
+
+      const loop = liveArpCurrentLoop;
+      const events = loop.state.sequence?.events || [];
+      while (loop.eventIndex < events.length) {
+        const event = events[loop.eventIndex];
+        const eventAt = loop.startAt + Math.max(0, Number(event?.offsetSeconds) || 0);
+        if (eventAt > horizon) return;
+        scheduleLiveArpEvent(loop, event);
+        loop.eventIndex += 1;
+      }
+
+      // A new loop takes the latest pending aP/sP state. The old loop has
+      // already scheduled every one of its authored events and remains intact.
+      if (liveArpNextLoopAt > horizon) return;
+      liveArpCurrentLoop = null;
+    }
+  }
+
+  async function startLiveArp(state) {
+    stopLive();
+    stopLiveArp();
+    const context = ensurePlaybackContext();
+    if (context.state === "suspended") await context.resume();
+    window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "sP-arp-context-ready", childAudioTime: context.currentTime });
+    liveArpPendingState = cloneLiveState(state);
+    if (!liveArpPendingState?.sequence || !liveArpPendingState?.synthState) throw new Error("A complete arp and synth live state is required.");
+    liveArpPlaying = true;
+    const requestedDelay = Math.max(LIVE_START_LEAD_SECONDS, Number(state?.runtimeEntry?.startDelay) || 0);
+    const targetEpochMs = Number(state?.runtimeEntry?.transportStartEpochMs);
+    const remainingDelay = Number.isFinite(targetEpochMs) ? Math.max(.02, (targetEpochMs - Date.now()) / 1000) : requestedDelay;
+    liveArpNextLoopAt = context.currentTime + remainingDelay;
+    window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "sP-arp-step-zero-armed", childAudioTime: context.currentTime, childStartAt: liveArpNextLoopAt, requestedDelay, remainingDelay, expectedEpochMs: Number(state?.runtimeEntry?.transportStartEpochMs) || null });
+    liveArpNextMelodyBarAt = liveArpNextLoopAt;
+    liveArpMelodyBarIndex = 0;
+    liveArpCurrentLoop = null;
+    arpTick();
+    liveArpTimer = window.setInterval(arpTick, LIVE_TICK_MS);
+  }
+
+  function updateLiveArp(state) {
+    const next = cloneLiveState(state);
+    if (next?.sequence && next?.synthState) liveArpPendingState = next;
+  }
+
+  function stopLiveArp() {
+    liveArpPlaying = false;
+    if (liveArpTimer) window.clearInterval(liveArpTimer);
+    liveArpTimer = null;
+    liveArpPendingState = null;
+    liveArpCurrentLoop = null;
+    liveArpNextMelodyBarAt = 0;
+    liveArpMelodyBarIndex = 0;
+  }
+
+  async function prepareLive() {
+    const context = ensurePlaybackContext();
+    if (context.state === "suspended") await context.resume();
+    window.top?.InterPhaceRuntimeHost?.transportDiagnostic?.({ stage: "sP-prepared", childAudioTime: context.currentTime });
+  }
+
   window.SynthPhaceAuditionEngine = Object.freeze({
     play,
     stop,
@@ -759,5 +1276,23 @@
     getAuditionState: () => auditionState,
     isRendering: () => auditionState === "rendering",
     isPlaying: () => auditionState === "playing",
+  });
+
+  window.SynthPhaceLiveAPI = Object.freeze({
+    state: () => window.SynthPhaceLiveState?.snapshot?.() || null,
+    prepare: prepareLive,
+    start: startLive,
+    update: updateLive,
+    startArp: startLiveArp,
+    updateArp: updateLiveArp,
+    scheduleRootSynthTrigger,
+    scheduleRootArpEvent,
+    stopRootVoices,
+    prebuildDryArpNotes,
+    prebuildCompleteArpNotes,
+    warmCompleteArpNotes,
+    completeArpPrebuildDiagnostics: () => ({ ...lastCompleteArpPrebuildDiagnostics, builds: [...completeArpBuilds.values()] }),
+    dryArpPrebuildDiagnostics: () => lastDryArpPrebuildDiagnostics,
+    stop: () => { stopLive(); stopLiveArp(); },
   });
 })();

@@ -1,5 +1,9 @@
 # noisePhace Button Map
 
+## Build 645 preset status
+
+Each B1–B4 preset control is bright only when its preset-owned macro values exactly match a named preset; otherwise its last selected preset name remains as a dimmed, selectable reference. B1/B2 Amount is independent of its page preset and does not affect this status.
+
 ## Build 300 — B2 Artifact engine
 
 The old grid-based N1–N4 pattern architecture is retired from the forward plan. noisePhace becomes a continuous evolving bed instrument.

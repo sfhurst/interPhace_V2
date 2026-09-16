@@ -1,0 +1,196 @@
+build-588-baseline/synthPhace/app.js:261:    if (activeId === "app2_b4_p3") requestAnimationFrame(() => redrawDrawnEnvelope("drawnEnvelope"));
+build-588-baseline/synthPhace/app.js:262:    if (activeId === "app2_b4_p2_pretty") requestAnimationFrame(redrawPrettyDrawnEnvelope);
+build-588-baseline/synthPhace/app.js:1266:    requestAnimationFrame(redrawDrawnEnvelope);
+build-588-baseline/synthPhace/app.js:1320:    prettyDrawnArea.addEventListener("pointerup", finishPrettyDraw); prettyDrawnArea.addEventListener("pointercancel", finishPrettyDraw); window.addEventListener("resize", redrawPrettyDrawnEnvelope); requestAnimationFrame(redrawPrettyDrawnEnvelope);
+build-588-baseline/drumPhace/app.js:2031:          stepLongPressTimer = window.setTimeout(() => {
+build-588-baseline/drumPhace/app.js:2042:          stepLongPressTimer = window.setTimeout(() => {
+build-588-baseline/drumPhace/app.js:2721:  patternLongPressFrame = requestAnimationFrame(updatePatternLongPressFill);
+build-588-baseline/drumPhace/app.js:2735:  patternLongPressFrame = requestAnimationFrame(updatePatternLongPressFill);
+build-588-baseline/drumPhace/app.js:2736:  patternLongPressTimer = window.setTimeout(() => {
+build-588-baseline/drumPhace/app.js:2743:    window.setTimeout(() => setPatternLongPressFill(0), 180);
+build-588-baseline/drumPhace/app.js:2796:  chanceLongPressFrame = requestAnimationFrame(updateChanceLongPressFill);
+build-588-baseline/drumPhace/app.js:2830:  chanceLongPressFrame = requestAnimationFrame(updateChanceLongPressFill);
+build-588-baseline/drumPhace/app.js:2831:  chanceLongPressTimer = window.setTimeout(() => {
+build-588-baseline/drumPhace/app.js:2838:    window.setTimeout(() => setChanceLongPressFill(0), 180);
+build-588-baseline/drumPhace/app.js:3023:    const now = auditionAudioContext.currentTime;
+build-588-baseline/drumPhace/app.js:3028:    window.setTimeout(() => { try { master.disconnect(); } catch (_) {} }, 60);
+build-588-baseline/drumPhace/app.js:3040:      const now = ctx?.currentTime || 0;
+build-588-baseline/drumPhace/app.js:3046:        window.setTimeout(() => {
+build-588-baseline/drumPhace/app.js:3903:  const delay = Math.max(0, (startTime - auditionAudioContext.currentTime) * 1000);
+build-588-baseline/drumPhace/app.js:3904:  window.setTimeout(() => {
+build-588-baseline/drumPhace/app.js:3911:async function startLiveDrumAudition(mode = "active", sequence = null, mixer = null, startDelay = null) {
+build-588-baseline/drumPhace/app.js:3917:  liveDrumMaster.gain.setValueAtTime(0, auditionAudioContext.currentTime);
+build-588-baseline/drumPhace/app.js:3918:  liveDrumMaster.gain.linearRampToValueAtTime(1, auditionAudioContext.currentTime + .015);
+build-588-baseline/drumPhace/app.js:3925:  const entryDelay = Math.max(.02, Number(startDelay) || .05);
+build-588-baseline/drumPhace/app.js:3926:  liveDrumStartedAt = auditionAudioContext.currentTime + entryDelay; liveDrumNextStep = 0;
+build-588-baseline/drumPhace/app.js:3933:    const horizon = auditionAudioContext.currentTime + LIVE_DRUM_LOOKAHEAD_SECONDS;
+build-588-baseline/drumPhace/app.js:3939:  tick(); liveDrumTimer = window.setInterval(tick, LIVE_DRUM_TICK_MS);
+build-588-baseline/drumPhace/app.js:3983:    await new Promise(resolve => window.setTimeout(resolve, 1000));
+build-588-baseline/drumPhace/app.js:4035:    await startLiveDrumAudition("all", state?.sequence, state?.mixer, state?.runtimeEntry?.startDelay);
+build-588-baseline/drumPhace/app.js:4106:  if (event.origin !== window.location.origin || event.data?.type !== "interPhace:runtime-drum-playhead") return;
+build-588-baseline/app.js:289:        window.setTimeout(check, 25);
+build-588-baseline/app.js:295:        window.setTimeout(check, 25);
+build-588-baseline/app.js:415:      const now = ctx?.currentTime || 0;
+build-588-baseline/app.js:423:        window.setTimeout(() => {
+build-588-baseline/app.js:819:      await new Promise(resolve => window.setTimeout(resolve, GLOBAL_POST_RENDER_PAUSE_MS));
+build-588-baseline/app.js:853:      const runtimeStartDelay = Math.max(0.02, Number(liveRuntimeStart?.startDelay) || 0.02);
+build-588-baseline/app.js:854:      const transportStartTime = ctx.currentTime + runtimeStartDelay;
+build-588-baseline/app.js:936:          const t = Math.max(0, ctx.currentTime - startedAt);
+build-588-baseline/app.js:945:          const now = ctx.currentTime;
+build-588-baseline/app.js:951:        const timer = window.setInterval(tick, tickMs);
+build-588-baseline/app.js:957:            const now = ctx.currentTime;
+build-588-baseline/app.js:1395:      timer = window.setTimeout(() => {
+build-588-baseline/app.js:1511:    interSequencerClearFrame = requestAnimationFrame(updateInterSequencerClearFill);
+build-588-baseline/app.js:1532:    interSequencerClearFrame = requestAnimationFrame(updateInterSequencerClearFill);
+build-588-baseline/app.js:1533:    interSequencerClearTimer = window.setTimeout(() => {
+build-588-baseline/app.js:1540:      window.setTimeout(() => setInterSequencerClearFill(0), 180);
+build-588-baseline/app.js:1904:            newFillFrame = requestAnimationFrame(updateNewFill);
+build-588-baseline/app.js:1920:          newFillFrame = requestAnimationFrame(updateNewFill);
+build-588-baseline/app.js:1921:          newHoldTimer = window.setTimeout(performNewProjectReset, NEW_HOLD_MS);
+build-588-baseline/app.js:1983:          if (elapsed < EXPORT_HOLD_MS) exportFillFrame = requestAnimationFrame(updateExportFill);
+build-588-baseline/app.js:2012:            window.setTimeout(() => {
+build-588-baseline/app.js:2031:          exportFillFrame = requestAnimationFrame(updateExportFill);
+build-588-baseline/app.js:2032:          exportHoldTimer = window.setTimeout(performExport, EXPORT_HOLD_MS);
+build-588-baseline/app.js:2682:    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+build-588-baseline/app.js:3909:    const paint = now => { if (!holding || fired) return; setFill(Math.max(0, ((now - startedAt - SNAPSHOT_FILL_DELAY_MS) / (SNAPSHOT_HOLD_MS - SNAPSHOT_FILL_DELAY_MS)) * 100)); frame = requestAnimationFrame(paint); };
+build-588-baseline/app.js:3914:      fired = false; cancel(); holding = true; startedAt = performance.now(); frame = requestAnimationFrame(paint);
+build-588-baseline/app.js:3915:      timer = window.setTimeout(() => {
+build-588-baseline/synthPhace/audio/fm-engine.js:250:  const t0 = ctx.currentTime;
+build-588-baseline/arpPhace/app.js:32:  arpB2LongPressFrame = requestAnimationFrame(updateArpB2LongPressFill);
+build-588-baseline/arpPhace/app.js:45:  arpB2LongPressFrame = requestAnimationFrame(updateArpB2LongPressFill);
+build-588-baseline/arpPhace/app.js:46:  arpB2LongPressTimer = window.setTimeout(() => {
+build-588-baseline/arpPhace/app.js:60:    window.setTimeout(() => setArpB2LongPressFill(0), 180);
+build-588-baseline/arpPhace/app.js:1263:    holdTimer = setTimeout(() => {
+build-588-baseline/arpPhace/app.js:1514:      stepLongPressTimer = window.setTimeout(() => {
+build-588-baseline/arpPhace/app.js:2644:  melodyButtonClearFrame = requestAnimationFrame(updateMelodyButtonClearFill);
+build-588-baseline/arpPhace/app.js:2657:  melodyButtonClearFrame = requestAnimationFrame(updateMelodyButtonClearFill);
+build-588-baseline/arpPhace/app.js:2658:  melodyButtonClearTimer = window.setTimeout(() => {
+build-588-baseline/arpPhace/app.js:2665:    window.setTimeout(() => setMelodyButtonClearFill(0), 180);
+build-588-baseline/arpPhace/app.js:2730:  chanceButtonClearFrame = requestAnimationFrame(updateChanceButtonClearFill);
+build-588-baseline/arpPhace/app.js:2743:  chanceButtonClearFrame = requestAnimationFrame(updateChanceButtonClearFill);
+build-588-baseline/arpPhace/app.js:2744:  chanceButtonClearTimer = window.setTimeout(() => {
+build-588-baseline/arpPhace/app.js:2751:    window.setTimeout(() => setChanceButtonClearFill(0), 180);
+build-588-baseline/arpPhace/app.js:2873:  resizeTimer = setTimeout(() => {
+build-588-baseline/arpPhace/app.js:3272:  if (message.type !== "interPhace:runtime-arp-playhead") return;
+build-588-baseline/arpPhace/app.js:3273:  const playhead = message.playhead || {};
+build-588-baseline/arpPhace/app.js:3275:  if (playhead.mode === "arp") {
+build-588-baseline/arpPhace/app.js:3276:    const cell = document.querySelector(`.arpPatternCell[data-pattern-index="${Math.max(0, Number(playhead.step) % 32)}"]`);
+build-588-baseline/arpPhace/app.js:3280:  if (playhead.phrase !== currentPhrase) return;
+build-588-baseline/arpPhace/app.js:3281:  const index = Math.max(0, Number(playhead.step) % (ROWS * MAX_COLS));
+build-588-baseline/synthPhace/audio/pretty-engine.js:16:    const t0 = ctx.currentTime;
+build-588-baseline/synthPhace/audio/drawn-envelope-engine.js:12:    envelope.gain.setValueCurveAtTime(curve, ctx.currentTime, duration);
+build-588-baseline/arpPhace/audio/audition-engine.js:16:  let nextLoopStart = 0;
+build-588-baseline/arpPhace/audio/audition-engine.js:25:  let playheadTimers = [];
+build-588-baseline/arpPhace/audio/audition-engine.js:177:        window.setTimeout(poll, 40);
+build-588-baseline/arpPhace/audio/audition-engine.js:278:    for (const timer of playheadTimers) window.clearTimeout(timer);
+build-588-baseline/arpPhace/audio/audition-engine.js:279:    playheadTimers = [];
+build-588-baseline/arpPhace/audio/audition-engine.js:286:      const delay = Math.max(0, (baseStart - ctx.currentTime + step * sixteenth) * 1000);
+build-588-baseline/arpPhace/audio/audition-engine.js:287:      playheadTimers.push(window.setTimeout(() => {
+build-588-baseline/arpPhace/audio/audition-engine.js:301:    const horizon = context.currentTime + LOOKAHEAD_SECONDS;
+build-588-baseline/arpPhace/audio/audition-engine.js:303:    while (nextLoopStart <= horizon) {
+build-588-baseline/arpPhace/audio/audition-engine.js:304:      scheduleLoop(nextLoopStart);
+build-588-baseline/arpPhace/audio/audition-engine.js:305:      nextLoopStart += snapshot.loopSeconds;
+build-588-baseline/arpPhace/audio/audition-engine.js:328:      const now = context.currentTime;
+build-588-baseline/arpPhace/audio/audition-engine.js:383:      nextLoopStart = ctx.currentTime + START_LEAD_SECONDS;
+build-588-baseline/arpPhace/audio/audition-engine.js:384:      scheduleLoop(nextLoopStart);
+build-588-baseline/arpPhace/audio/audition-engine.js:385:      nextLoopStart += state.loopSeconds;
+build-588-baseline/arpPhace/audio/audition-engine.js:387:      scheduler = window.setInterval(schedulerTick, SCHEDULER_MS);
+build-588-baseline/arpPhace/audio/audition-engine.js:421:    nextLoopStart = ctx.currentTime + START_LEAD_SECONDS;
+build-588-baseline/arpPhace/audio/audition-engine.js:422:    schedulePlayheadFollower(ctx, nextLoopStart, state);
+build-588-baseline/arpPhace/audio/audition-engine.js:423:    scheduler = window.setInterval(() => {
+build-588-baseline/arpPhace/audio/audition-engine.js:425:      const horizon = ctx.currentTime + LOOKAHEAD_SECONDS;
+build-588-baseline/arpPhace/audio/audition-engine.js:426:      while (nextLoopStart + snapshot.loopSeconds <= horizon) {
+build-588-baseline/arpPhace/audio/audition-engine.js:427:        nextLoopStart += snapshot.loopSeconds;
+build-588-baseline/arpPhace/audio/audition-engine.js:432:        schedulePlayheadFollower(ctx, nextLoopStart, snapshot);
+build-588-baseline/synthPhace/audio/audition-engine.js:76:      window.AmpEnvelopeEngine.initializeCompanionGains?.(source.modulationTargets, ctx.currentTime);
+build-588-baseline/synthPhace/audio/audition-engine.js:215:    const graphStart = ctx.currentTime;
+build-588-baseline/synthPhace/audio/audition-engine.js:383:    const now = ctx.currentTime;
+build-588-baseline/synthPhace/audio/audition-engine.js:408:    await new Promise((resolve) => window.setTimeout(resolve, POST_RENDER_PAUSE_MS));
+build-588-baseline/synthPhace/audio/audition-engine.js:432:        window.setTimeout(() => {
+build-588-baseline/synthPhace/audio/audition-engine.js:777:  // The established graph builders use ctx.currentTime when scheduling their
+build-588-baseline/synthPhace/audio/audition-engine.js:780:  function scheduledContext(ctx, startAt, scheduledSources = null) {
+build-588-baseline/synthPhace/audio/audition-engine.js:783:        if (property === "currentTime") return startAt;
+build-588-baseline/synthPhace/audio/audition-engine.js:826:      try { oscillator.stop(record.context.currentTime + 0.005); } catch (_) {}
+build-588-baseline/synthPhace/audio/audition-engine.js:839:    window.setTimeout(
+build-588-baseline/synthPhace/audio/audition-engine.js:841:      Math.max(0, at - record.context.currentTime + LIVE_VOICE_STEAL_RELEASE_SECONDS + .02) * 1000,
+build-588-baseline/synthPhace/audio/audition-engine.js:845:  function enforceLiveVoiceLimit(context, startAt) {
+build-588-baseline/synthPhace/audio/audition-engine.js:847:      .filter(record => record.startAt <= startAt && record.audibleUntil > startAt)
+build-588-baseline/synthPhace/audio/audition-engine.js:852:    releaseLiveVoice(activeAtStart[0], Math.max(context.currentTime, startAt));
+build-588-baseline/synthPhace/audio/audition-engine.js:855:  function registerLiveVoice(context, graph, startAt, gateSeconds, releaseSeconds) {
+build-588-baseline/synthPhace/audio/audition-engine.js:856:    enforceLiveVoiceLimit(context, startAt);
+build-588-baseline/synthPhace/audio/audition-engine.js:857:    const audibleUntil = startAt + gateSeconds + releaseSeconds;
+build-588-baseline/synthPhace/audio/audition-engine.js:862:      startAt,
+build-588-baseline/synthPhace/audio/audition-engine.js:867:    record.cleanupTimer = window.setTimeout(
+build-588-baseline/synthPhace/audio/audition-engine.js:869:      Math.ceil((Math.max(0, audibleUntil - context.currentTime) + 0.04) * 1000),
+build-588-baseline/synthPhace/audio/audition-engine.js:874:  function scheduleLiveTrigger(startAt, state) {
+build-588-baseline/synthPhace/audio/audition-engine.js:881:    const graph = buildGraph(scheduledContext(context, startAt, sources), patch, loopSeconds, releaseSeconds);
+build-588-baseline/synthPhace/audio/audition-engine.js:883:    registerLiveVoice(context, graph, startAt, loopSeconds, releaseSeconds);
+build-588-baseline/synthPhace/audio/audition-engine.js:889:    const horizon = context.currentTime + LIVE_LOOKAHEAD_SECONDS;
+build-588-baseline/synthPhace/audio/audition-engine.js:892:      if (liveNextTriggerAt < context.currentTime - 0.02) liveNextTriggerAt = context.currentTime + 0.02;
+build-588-baseline/synthPhace/audio/audition-engine.js:908:    liveNextTriggerAt = context.currentTime + Math.max(LIVE_START_LEAD_SECONDS, Number(state?.runtimeEntry?.startDelay) || 0);
+build-588-baseline/synthPhace/audio/audition-engine.js:910:    liveTimer = window.setInterval(liveTick, LIVE_TICK_MS);
+build-588-baseline/synthPhace/audio/audition-engine.js:925:    const now = context.currentTime;
+build-588-baseline/synthPhace/audio/audition-engine.js:932:      window.setTimeout(() => disposeLiveVoice(record), (LIVE_STOP_RELEASE_SECONDS + 0.04) * 1000);
+build-588-baseline/synthPhace/audio/audition-engine.js:950:      scheduledContext(context, loop.startAt + offset, sources),
+build-588-baseline/synthPhace/audio/audition-engine.js:956:    registerLiveVoice(context, graph, loop.startAt + offset, gateSeconds, releaseSeconds);
+build-588-baseline/synthPhace/audio/audition-engine.js:966:    const horizon = context.currentTime + LIVE_ARP_LOOKAHEAD_SECONDS;
+build-588-baseline/synthPhace/audio/audition-engine.js:971:        liveArpCurrentLoop = { startAt: liveArpNextLoopAt, state, eventIndex: 0 };
+build-588-baseline/synthPhace/audio/audition-engine.js:979:        const eventAt = loop.startAt + Math.max(0, Number(event?.offsetSeconds) || 0);
+build-588-baseline/synthPhace/audio/audition-engine.js:1000:    liveArpNextLoopAt = context.currentTime + Math.max(LIVE_START_LEAD_SECONDS, Number(state?.runtimeEntry?.startDelay) || 0);
+build-588-baseline/synthPhace/audio/audition-engine.js:1003:    liveArpTimer = window.setInterval(arpTick, LIVE_TICK_MS);
+build-588-baseline/shared/shell.js:164:      return postRuntimeMessage("interPhace:runtime-start", { phace, state: completeState });
+build-588-baseline/shared/shell.js:174:      return postRuntimeMessage("interPhace:runtime-global-start", { payload: completePayload });
+build-588-baseline/shared/shell.js:258:      b6HoldFrame = requestAnimationFrame(paintB6Hold);
+build-588-baseline/shared/shell.js:268:      if (canSave) b6HoldFrame = requestAnimationFrame(paintB6Hold);
+build-588-baseline/shared/shell.js:269:      b6HoldTimer = window.setTimeout(() => {
+build-588-baseline/shared/shell.js:275:        suppressB6ClickTimer = window.setTimeout(() => { suppressNextB6Click = false; }, 1000);
+build-588-baseline/shared/shell.js:525:      frame = requestAnimationFrame(layout);
+build-588-baseline/shared/shell.js:619:    await new Promise(resolve => requestAnimationFrame(() => {
+build-588-baseline/shared/shell.js:620:      requestAnimationFrame(resolve);
+build-588-baseline/shared/shell.js:735:      window.setTimeout(() => window.dispatchEvent(new CustomEvent("interPhace:audition-state")), 0);
+build-588-baseline/shared/shell.js:741:    [0, 16, 50].forEach(delay => window.setTimeout(syncPlaying, delay));
+build-588-baseline/shared/shell.js:742:    const timer = window.setInterval(syncPlaying, 100);
+build-588-baseline/shared/bed-loop.js:13:    startTime = context.currentTime + 0.02,
+build-588-baseline/shared/bed-loop.js:59:      const horizon = context.currentTime + SCHEDULE_HORIZON_SECONDS;
+build-588-baseline/shared/bed-loop.js:70:      const now = context.currentTime;
+build-588-baseline/shared/bed-loop.js:78:        window.setTimeout(() => {
+build-588-baseline/shared/bed-loop.js:86:    refillTimer = window.setInterval(fillSchedule, REFILL_INTERVAL_MS);
+build-588-baseline/shared/runtime-shell.js:82:  window.setInterval(processPendingLiveState, LIVE_STATE_POLL_MS);
+build-588-baseline/shared/runtime-shell.js:94:    view.contentWindow.postMessage({ type: "interPhace:runtime-drum-playhead", step }, window.location.origin);
+build-588-baseline/shared/runtime-shell.js:97:  function notifyArpPlayhead(playhead) {
+build-588-baseline/shared/runtime-shell.js:99:    view.contentWindow.postMessage({ type: "interPhace:runtime-arp-playhead", playhead: cloneState(playhead) }, window.location.origin);
+build-588-baseline/shared/runtime-shell.js:135:        window.setTimeout(poll, 25);
+build-588-baseline/shared/runtime-shell.js:138:      window.setTimeout(poll, 25);
+build-588-baseline/shared/runtime-shell.js:160:        window.setTimeout(poll, 25);
+build-588-baseline/shared/runtime-shell.js:163:      window.setTimeout(poll, 25);
+build-588-baseline/shared/runtime-shell.js:183:        window.setTimeout(poll, 25);
+build-588-baseline/shared/runtime-shell.js:186:      window.setTimeout(poll, 25);
+build-588-baseline/shared/runtime-shell.js:202:    const now = context.currentTime;
+build-588-baseline/shared/runtime-shell.js:206:    const entryAt = Math.max(now, Number(entry?.startAt) || now);
+build-588-baseline/shared/runtime-shell.js:217:      previous.disposeTimer = window.setTimeout(() => {
+build-588-baseline/shared/runtime-shell.js:237:    const now = audioContext.currentTime;
+build-588-baseline/shared/runtime-shell.js:264:    const now = audioContext.currentTime;
+build-588-baseline/shared/runtime-shell.js:268:    voice.disposeTimer = window.setTimeout(() => dispose(voice), (LIVE_STOP_RELEASE_SECONDS + .04) * 1000);
+build-588-baseline/shared/runtime-shell.js:284:    const gain = context.createGain(), now = context.currentTime, entry = state?.runtimeEntry, entryAt = Math.max(now, Number(entry?.startAt) || now), fade = entry ? Math.max(0, Number(entry.fadeIn) || 0) : (immediate ? .04 : LIVE_CROSSFADE_SECONDS); node.connect(gain); gain.connect(context.destination); gain.gain.setValueAtTime(0,now); gain.gain.setValueAtTime(0,entryAt); gain.gain.linearRampToValueAtTime(Math.max(0,Number(state.mixer?.gain)||0),entryAt+fade);
+build-588-baseline/shared/runtime-shell.js:285:    const previous=liveDrone;liveDrone={node,gain};if(previous){previous.gain.gain.cancelScheduledValues(now);previous.gain.gain.setValueAtTime(previous.gain.gain.value,now);previous.gain.gain.linearRampToValueAtTime(0,now+LIVE_CROSSFADE_SECONDS);retiringDrone=previous;previous.disposeTimer=window.setTimeout(()=>{if(retiringDrone===previous)retiringDrone=null;disposeDrone(previous)},(LIVE_CROSSFADE_SECONDS+.06)*1000)}
+build-588-baseline/shared/runtime-shell.js:353:    const next = buildLiveDrone(state); const now = audioContext.currentTime;
+build-588-baseline/shared/runtime-shell.js:356:    if (previous) { previous.master.gain.cancelScheduledValues(now); previous.master.gain.setValueAtTime(previous.master.gain.value, now); previous.master.gain.linearRampToValueAtTime(0, now + .75); window.setTimeout(() => previous.nodes.forEach(node => { try { node.stop?.(); node.disconnect(); } catch (_) {} }), 800); }
+build-588-baseline/shared/runtime-shell.js:362:    const now = audioContext.currentTime; current.master.gain.cancelScheduledValues(now); current.master.gain.setValueAtTime(current.master.gain.value, now); current.master.gain.linearRampToValueAtTime(0, now + .03);
+build-588-baseline/shared/runtime-shell.js:363:    window.setTimeout(() => current.nodes.forEach(node => { try { node.stop?.(); node.disconnect(); } catch (_) {} }), 60);
+build-588-baseline/shared/runtime-shell.js:368:    droneReplacementTimer = window.setTimeout(() => { droneReplacementTimer = null; if (activeSession?.phace === "dronePhace") replaceLiveDrone(state).catch(console.error); }, 550);
+build-588-baseline/shared/runtime-shell.js:378:    const bus = audioContext.createGain(); const now = audioContext.currentTime;
+build-588-baseline/shared/runtime-shell.js:386:      window.setTimeout(() => { try { previous.transport.stop(); previous.bus.disconnect(); } catch (_) {} }, 760);
+build-588-baseline/shared/runtime-shell.js:445:    const globalStartAt = context.currentTime + GLOBAL_RUNTIME_START_GUARD_SECONDS;
+build-588-baseline/shared/runtime-shell.js:453:      source.runtimeEntry = { startAt: globalStartAt + preRoll + lead[phace], fadeIn: Math.max(0, Math.min(10, Number(entries[key]?.fadeIn) || 0)) };
+build-588-baseline/shared/runtime-shell.js:459:      drum.runtimeEntry = { startDelay: Math.max(.02, globalStartAt + preRoll - context.currentTime) };
+build-588-baseline/shared/runtime-shell.js:466:      globalPitched.runtimeEntry = { startDelay: Math.max(.02, globalStartAt + preRoll - context.currentTime) };
+build-588-baseline/shared/runtime-shell.js:492:    return { started: true, startDelay: Math.max(.02, globalStartAt - context.currentTime) };
+build-588-baseline/shared/runtime-shell.js:549:    if (!PHACES.has(message.phace) && message.type !== "interPhace:runtime-stop" && message.type !== "interPhace:runtime-global-start") return;
+build-588-baseline/shared/runtime-shell.js:591:    if (message.type === "interPhace:runtime-start") {
+build-588-baseline/shared/runtime-shell.js:597:    if (message.type === "interPhace:runtime-global-start") {
+build-588-baseline/shared/runtime-shell.js:622:    arpPlayhead: playhead => notifyArpPlayhead(playhead),
+build-588-baseline/synthPhace/audio/pretty-envelope-engine.js:5:    const t0 = ctx.currentTime;
+build-588-baseline/synthPhace/audio/carrier-envelope-engine.js:363:  const startTime = ctx.currentTime;
+build-588-baseline/synthPhace/audio/transient-source-engine.js:463:  const startTime = ctx.currentTime + Math.max(0, Number(offsetSeconds) || 0);
+build-588-baseline/synthPhace/audio/transient-source-engine.js:615:  const now = ctx.currentTime;
+build-588-baseline/synthPhace/audio/texture-engine.js:227:  const now = ctx.currentTime;

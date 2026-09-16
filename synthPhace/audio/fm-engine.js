@@ -327,7 +327,7 @@ FMEngine.build = function (ctx, baseFreq, fmParams, noteLength) {
   // compatibility, but this version uses it primarily for low-frequency body:
   // fundamental reinforcement + restrained octave-down support. No detuning.
   const harmonicColor = clamp(fmParams.harmonics, 0, 100) / 100;
-  const colorOscillators = [];
+  const oscillators = [carrier];
 
   function smooth01(value) {
     const x = clamp(value, 0, 1);
@@ -358,7 +358,7 @@ FMEngine.build = function (ctx, baseFreq, fmParams, noteLength) {
     gainNode.connect(mixer);
     oscillator.start(t0);
     oscillator.stop(stopTime);
-    colorOscillators.push(oscillator);
+    oscillators.push(oscillator);
   }
 
   function addCleanHarmonics(parentFreq, parentGain) {
@@ -417,6 +417,7 @@ FMEngine.build = function (ctx, baseFreq, fmParams, noteLength) {
 
     oscillator.start(t0);
     oscillator.stop(stopTime);
+    oscillators.push(oscillator);
   });
 
   mixer.gain.value = 1;
@@ -424,11 +425,13 @@ FMEngine.build = function (ctx, baseFreq, fmParams, noteLength) {
   if (mod2) {
     mod2.start(t0);
     mod2.stop(stopTime);
+    oscillators.push(mod2);
   }
 
   if (mod1) {
     mod1.start(t0);
     mod1.stop(stopTime);
+    oscillators.push(mod1);
   }
 
   carrier.start(t0);
@@ -437,6 +440,7 @@ FMEngine.build = function (ctx, baseFreq, fmParams, noteLength) {
   return {
     node: mixer,
     carrier,
+    oscillators,
     modulationTargets: {
       detune: carrier.detune,
       carrierGain: carrierGain.gain,

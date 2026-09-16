@@ -534,6 +534,18 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 }
 .presetSlider:focus-visible { outline: none; }
 
+/* A preset remains selectable after a manual macro edit, but it is not the
+   source of the current sound until the page exactly matches a preset again. */
+.macroControl.preset-inactive .macroLabel,
+.macroControl.preset-inactive .macroValue,
+.macroControl.preset-inactive .presetSlider {
+  opacity: .45;
+}
+
+.macroControl.preset-inactive .presetSlider {
+  cursor: pointer;
+}
+
 /* Canonical project hardware-status-light toggle, cloned for noisePhace LINK. */
 .app1ToggleControl {
   min-height: 32px;

@@ -9,7 +9,7 @@ Before any button page is opened, direct interPhace loads show the non-button st
 
 | Button | Current function | Pages / behavior | Status |
 |---|---|---|---|
-| B1 | Project | `app1_b1_p1` — Project Name, Root, Scale, Tempo, Length, Swing, and Timing controls owned by interPhace | Live |
+| B1 | Project | `app1_b1_p1` — Project Name, Root, Scale, Tempo, and Swing controls owned by interPhace | Live |
 | B2 | Mixer | `app1_b2_p1` — dynamic ARP/SYNTH, Kick, Snare, Hat, Noise, and Drone dB controls; ARP/SYNTH Playback and Drone/Noise Opposed Orbit; mute skips render work | Live / audition-wired |
 | B3 | Import | `app1_b3_p1` — Projects / Patches / MIDI / Kits selection grid plus eight local Project Snapshot slots | Live |
 | B4 | Export | `app1_b4_p1` — Projects / Patches / MIDI / Audio selection grid and export actions | Live |
@@ -22,7 +22,13 @@ B2 will cycle between **Mixer** and a deliberately small **Sequencer**. The Sequ
 
 ## Ownership
 
-interPhace owns project name, Root, Scale, Tempo, project length, global audition, global mix, import/export, and cross-Phace sequencing context. Child Phaces own their sound/pattern data.
+interPhace owns project name, Root, Scale, Tempo, Swing, global audition, global mix, import/export, and cross-Phace sequencing context. Child Phaces own their sound/pattern data. Project span is derived from populated Sequencer rows, or from the active visible drum-grid span when the Sequencer is blank.
+
+## Build 644 control cleanup
+
+- Removed the unused Timing controls from iP, sP, dP, aP, nP, and dnP settings.
+- Removed iP Project Length. The retained live runtime never consumed it; the former offline fallback now uses the active visible drum-grid span, matching normal blank-sequencer playback and construction export.
+- Old saved `timing` and `length` fields are ignored and removed on the next iP save.
 
 ## Addressing
 

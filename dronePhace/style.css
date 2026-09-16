@@ -533,3 +533,15 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   background: var(--bg);
 }
 .presetSlider:focus-visible { outline: none; }
+
+/* A preset remains selectable after a manual macro edit, but it is not the
+   source of the current sound until the page exactly matches a preset again. */
+.macroControl.preset-inactive .macroLabel,
+.macroControl.preset-inactive .macroValue,
+.macroControl.preset-inactive .presetSlider {
+  opacity: .45;
+}
+
+.macroControl.preset-inactive .presetSlider {
+  cursor: pointer;
+}

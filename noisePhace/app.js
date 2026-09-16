@@ -146,6 +146,7 @@ function save() {
       },
     }));
   } catch (_) {}
+  window.InterPhaceShell?.runtime?.publishState("noisePhace", liveState());
 }
 
 function loadState() {
@@ -190,15 +191,37 @@ function pageMatchesPreset(page, presetIndex) {
   );
 }
 
-function syncPresetForPage(page) {
+function refreshPresetStatus(page) {
   const slider = document.getElementById(pageControlId(page, 6));
   const valueEl = document.getElementById(`${slider?.id}_value`);
   if (!slider || !valueEl) return;
   const presets = PAGE_PRESETS[page] || [];
   const match = presets.findIndex((_, index) => pageMatchesPreset(page, index));
-  const current = Math.max(0, Math.min(presets.length - 1, Number(slider.value) || 0));
-  valueEl.textContent = presets[current]?.name || "INIT";
-  valueEl.classList.toggle("preset-modified", match !== current);
+  const control = slider.closest(".macroControl");
+  const active = match >= 0;
+  if (active) {
+    slider.value = String(match);
+    updateSlider(slider);
+  } else {
+    // Keep the last selected preset as the dimmed reference point. Macro
+    // values are authoritative, but the visible name identifies the preset
+    // this custom state was shaped from.
+    updateSlider(slider);
+  }
+  control?.classList.toggle("preset-inactive", !active);
+  control?.setAttribute("data-preset-active", active ? "true" : "false");
+  const selected = Math.max(0, Math.min(presets.length - 1, Number(slider.value) || 0));
+  slider.setAttribute("aria-label", active
+    ? `Preset: ${presets[match]?.name || "INIT"}`
+    : `Preset: ${presets[selected]?.name || "INIT"}, modified`);
+}
+
+function syncPresetForPage(page) {
+  refreshPresetStatus(page);
+}
+
+function refreshAllPresetStatuses() {
+  for (let page = 1; page <= 4; page += 1) refreshPresetStatus(page);
 }
 
 function applyPagePreset(page, presetIndex) {
@@ -640,7 +663,23 @@ function notifyAuditionState() {
   window.dispatchEvent(new CustomEvent("interPhace:audition-state"));
 }
 
-function stopAudition() {
+function inPersistentRuntime() {
+  return window.top !== window && !!window.InterPhaceShell?.runtime;
+}
+
+function liveState() {
+  const values = {};
+  document.querySelectorAll(".macroSlider, .presetSlider").forEach(slider => { values[slider.id] = Number(slider.value); });
+  return {
+    version: 1,
+    activePage,
+    values,
+    mixer: window.InterPhaceShell?.readMixerChannelGain?.("noise", { respectMute: false }) || { db: 0, muted: false, gain: 1 },
+  };
+}
+
+function stopAudition({ endRuntime = true } = {}) {
+  if (endRuntime && inPersistentRuntime()) window.InterPhaceShell.runtime.requestStop();
   auditionTransport?.stop?.();
   auditionTransport = null;
   auditionState = "idle";
@@ -649,10 +688,16 @@ function stopAudition() {
 
 // Build 484: local audition survives all in-Phace navigation and edits.
 // Leaving this Phace always stops its local audition.
-window.addEventListener("pagehide", stopAudition);
-window.addEventListener("beforeunload", stopAudition, { once: true });
+window.addEventListener("pagehide", () => stopAudition({ endRuntime: false }));
+window.addEventListener("beforeunload", () => stopAudition({ endRuntime: false }), { once: true });
 
 async function startAudition() {
+  if (inPersistentRuntime()) {
+    auditionState = "playing";
+    window.InterPhaceShell.runtime.requestStart("noisePhace", liveState());
+    notifyAuditionState();
+    return;
+  }
   auditionState = "rendering";
   notifyAuditionState();
   await window.InterPhaceShell.paintBeforeSynchronousWork();
@@ -684,6 +729,12 @@ async function startAudition() {
 
 function toggleAudition(event) {
   event?.preventDefault?.();
+  if (inPersistentRuntime() && window.InterPhaceShell.runtime.session()) {
+    window.InterPhaceShell.runtime.requestStop();
+    auditionState = "idle";
+    notifyAuditionState();
+    return;
+  }
   if (auditionState !== "idle") {
     stopAudition();
     return;
@@ -693,6 +744,13 @@ function toggleAudition(event) {
     stopAudition();
   });
 }
+
+window.addEventListener("interPhace:runtime-stop", () => {
+  if (auditionState === "playing") {
+    auditionState = "idle";
+    notifyAuditionState();
+  }
+});
 
 window.NoisePhaceRenderAPI = Object.freeze({
   getState() {
@@ -746,6 +804,8 @@ document.querySelectorAll(".presetSlider").forEach(slider => {
     applyPagePreset(page, Number(slider.value));
   });
 });
+
+refreshAllPresetStatuses();
 
 buttons.forEach((button, index) => button?.addEventListener("click", () => showPage(index + 1)));
 generateBtn?.addEventListener("click", generateCurrentPage);
